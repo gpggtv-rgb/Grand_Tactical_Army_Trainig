@@ -1,0 +1,5 @@
+{
+  "name": "Grand Tactical Army Trainig",
+  "description": "A high-performance, top-down GTA2-inspired action game featuring vehicle physics, pedestrian AI, and a wanted level system, built with React and HTML5 Canvas.",
+  "requestFramePermissions": []
+}
