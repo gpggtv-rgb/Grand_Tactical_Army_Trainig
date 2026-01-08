@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NEON CITY: 1999 - GTA2 REDUX</title>
+    <title>GTA 1999: NEON STREETS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; font-family: 'Courier New', Courier, monospace; }
@@ -29,38 +29,40 @@
         import React, { useState, useRef, useEffect } from 'react';
         import { createRoot } from 'react-dom/client';
 
-        // --- 상수 설정 ---
-        const TILE_SIZE = 128;
+        const TILE_SIZE = 160; // 도로 넓힘
         const CITY_SIZE = 40;
         const FRICTION = 0.94;
         const DRAG = 0.98;
-        const VEHICLE_ACCEL_BASE = 0.45;
+        const VEHICLE_ACCEL_BASE = 0.5;
         const VEHICLE_TURN_SPEED = 0.08;
-        const PLAYER_RUN_SPEED = 4.2;
-        const PLAYER_WALK_SPEED = 1.8;
+        const PLAYER_RUN_SPEED = 4.8;
+        const PLAYER_WALK_SPEED = 2.0;
+        const ROLL_SPEED = 8.5;
+        const STAMINA_REGEN = 0.3;
+        const STAMINA_RUN_COST = 0.2;
+        const STAMINA_ROLL_COST = 30;
+
         const COLORS = {
-            ROAD: '#111', SIDEWALK: '#222', BUILDING: '#151525', BUILDING_TOP: '#1e1e35',
-            PLAYER: '#00ffcc', PED: '#ffffff', MIST: 'rgba(0, 0, 0, 0.94)', FIRE: '#ff4400', WRECK: '#0a0a0a'
+            ROAD: '#1a1a1a', SIDEWALK: '#333', BUILDING: '#151525', BUILDING_TOP: '#1e1e35',
+            PLAYER: '#00ffcc', PED: '#ffffff', MIST: 'rgba(0, 0, 0, 0.92)', FIRE: '#ff4400', WRECK: '#0a0a0a'
         };
 
-        const WeaponType = { FIST: 'FIST', PISTOL: 'PISTOL', UZI: 'UZI', SNIPER: 'SNIPER', GRENADE: 'GRENADE' };
+        const WeaponType = { FIST: 'FIST', PISTOL: 'PISTOL', UZI: 'UZI', GRENADE: 'GRENADE' };
         const WEAPONS = {
-            [WeaponType.FIST]: { range: 70, damage: 15, cooldown: 12, zoomFactor: 1.1 },
-            [WeaponType.PISTOL]: { range: 600, damage: 25, cooldown: 18, zoomFactor: 1.6 },
-            [WeaponType.UZI]: { range: 850, damage: 12, cooldown: 5, zoomFactor: 2.0 },
-            [WeaponType.SNIPER]: { range: 1800, damage: 150, cooldown: 55, zoomFactor: 3.5 },
-            [WeaponType.GRENADE]: { range: 500, damage: 150, cooldown: 70, zoomFactor: 1.4 }
+            [WeaponType.FIST]: { range: 60, damage: 20, cooldown: 15, zoomFactor: 1.1 },
+            [WeaponType.PISTOL]: { range: 600, damage: 30, cooldown: 20, zoomFactor: 1.6 },
+            [WeaponType.UZI]: { range: 800, damage: 15, cooldown: 6, zoomFactor: 2.0 },
+            [WeaponType.GRENADE]: { range: 500, damage: 150, cooldown: 80, zoomFactor: 1.4 }
         };
 
-        // --- 유틸리티 함수 ---
         const generateMap = () => {
             const grid = [];
             for (let y = 0; y < CITY_SIZE; y++) {
                 grid[y] = [];
                 for (let x = 0; x < CITY_SIZE; x++) {
-                    if (x % 7 === 0 || y % 7 === 0) grid[y][x] = 1; // 도로
-                    else if (x % 7 === 1 || x % 7 === 6 || y % 7 === 1 || y % 7 === 6) grid[y][x] = 2; // 인도
-                    else grid[y][x] = Math.random() > 0.95 ? 4 : 3; // 3:건물, 4:공원
+                    if (x % 8 === 0 || y % 8 === 0) grid[y][x] = 1; // 2차선급 도로
+                    else if (x % 8 === 1 || x % 8 === 7 || y % 8 === 1 || y % 8 === 7) grid[y][x] = 2; // 인도
+                    else grid[y][x] = 3; // 건물
                 }
             }
             return grid;
@@ -79,46 +81,43 @@
             } catch(e) {}
         };
 
-        // --- 메인 게임 캔버스 컴포넌트 ---
         const GameCanvas = ({ onUpdate, gameKey }) => {
             const canvasRef = useRef(null);
             const engine = useRef({
-                player: { pos: { x: TILE_SIZE * 7.5, y: TILE_SIZE * 7.5 }, angle: 0, health: 100, stamina: 100, weapon: WeaponType.FIST, vehicleId: null, radius: 16, aimProg: 0, lastShot: 0 },
+                player: { pos: { x: TILE_SIZE * 8.5, y: TILE_SIZE * 8.5 }, angle: 0, health: 100, stamina: 100, weapon: WeaponType.FIST, vehicleId: null, radius: 18, aimProg: 0, lastShot: 0, state: 'idle', rollTimer: 0, swingTimer: 0, swingSide: 1 },
                 vehicles: [], peds: [], projectiles: [], particles: [],
                 map: generateMap(), keys: {}, mouse: { x: 0, y: 0, left: false, right: false },
-                camera: { zoom: 1.0 }, score: 0, lastTime: performance.now()
+                camera: { zoom: 1.0 }, score: 0, lastTime: performance.now(), lightCycle: 0
             });
 
             useEffect(() => {
                 const eng = engine.current;
-                // 초기 스폰
-                for (let i = 0; i < 45; i++) {
+                eng.vehicles = []; eng.peds = [];
+                for (let i = 0; i < 50; i++) {
                     eng.vehicles.push({
-                        id: `v-${i}`, pos: { x: (Math.floor(Math.random() * 5) * 7 + 0.5) * TILE_SIZE, y: Math.random() * CITY_SIZE * TILE_SIZE },
-                        angle: Math.random() < 0.5 ? 0 : Math.PI, speed: 0, health: 100, gear: 1, color: `hsl(${Math.random() * 360}, 65%, 45%)`,
-                        radius: 48, driver: i < 15 ? 'npc' : null, isWreck: false, burnTime: 0,
-                        crumpleOffsets: Array(4).fill(0).map(() => ({ x: 0, y: 0 }))
+                        id: `v-${i}`, pos: { x: (Math.floor(Math.random() * 5) * 8 + 0.5) * TILE_SIZE, y: Math.random() * CITY_SIZE * TILE_SIZE },
+                        angle: Math.random() < 0.5 ? 0 : Math.PI, speed: 0, health: 100, gear: 1, color: `hsl(${Math.random() * 360}, 60%, 40%)`,
+                        radius: 52, driver: i < 15 ? 'npc' : null, isWreck: false, burnTime: 0, crumpleOffsets: Array(4).fill(0).map(() => ({ x: 0, y: 0 }))
                     });
                 }
-                for (let i = 0; i < 70; i++) {
-                    eng.peds.push({ id: `p-${i}`, pos: { x: Math.random() * CITY_SIZE * TILE_SIZE, y: Math.random() * CITY_SIZE * TILE_SIZE }, angle: Math.random() * Math.PI * 2, health: 100, radius: 16, walkTimer: Math.random() * 200 });
+                for (let i = 0; i < 80; i++) {
+                    eng.peds.push({ id: `p-${i}`, pos: { x: Math.random() * CITY_SIZE * TILE_SIZE, y: Math.random() * CITY_SIZE * TILE_SIZE }, angle: Math.random() * Math.PI * 2, health: 100, radius: 18, walkTimer: Math.random() * 200 });
                 }
 
                 const handleKey = (e, down) => {
                     eng.keys[e.code] = down;
                     if (down) {
                         if (e.code === 'KeyF') toggleVehicle();
-                        if (e.code === 'KeyE') shiftGear();
-                        const wMap = { Digit1: WeaponType.FIST, Digit2: WeaponType.PISTOL, Digit3: WeaponType.UZI, Digit4: WeaponType.SNIPER, Digit5: WeaponType.GRENADE };
+                        if (e.code === 'KeyE' && eng.player.vehicleId) shiftGear();
+                        if (e.code === 'Space' && !eng.player.vehicleId && eng.player.stamina > STAMINA_ROLL_COST && eng.player.state !== 'rolling') performRoll();
+                        const wMap = { Digit1: WeaponType.FIST, Digit2: WeaponType.PISTOL, Digit3: WeaponType.UZI, Digit4: WeaponType.GRENADE };
                         if (wMap[e.code]) eng.player.weapon = wMap[e.code];
                     }
                 };
-                const handleMouse = (e, down) => { if (e.button === 0) eng.mouse.left = down; if (e.button === 2) eng.mouse.right = down; };
-                
                 window.addEventListener('keydown', (e) => handleKey(e, true));
                 window.addEventListener('keyup', (e) => handleKey(e, false));
-                window.addEventListener('mousedown', (e) => handleMouse(e, true));
-                window.addEventListener('mouseup', (e) => handleMouse(e, false));
+                window.addEventListener('mousedown', (e) => { if(e.button === 0) eng.mouse.left = true; if(e.button === 2) eng.mouse.right = true; });
+                window.addEventListener('mouseup', (e) => { if(e.button === 0) eng.mouse.left = false; if(e.button === 2) eng.mouse.right = false; });
                 window.addEventListener('mousemove', (e) => { eng.mouse.x = e.clientX; eng.mouse.y = e.clientY; });
                 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -126,16 +125,21 @@
                 return () => cancelAnimationFrame(frame);
             }, [gameKey]);
 
+            const performRoll = () => {
+                const eng = engine.current;
+                eng.player.stamina -= STAMINA_ROLL_COST;
+                eng.player.state = 'rolling';
+                eng.player.rollTimer = 25;
+                playSfx(150, 'sine', 0.2, 0.1);
+            };
+
             const shiftGear = () => {
                 const eng = engine.current;
-                if (eng.player.vehicleId) {
-                    const v = eng.vehicles.find(v => v.id === eng.player.vehicleId);
-                    if (v && !v.isWreck) {
-                        const gears = [-1, 1, 2, 3, 4];
-                        const idx = gears.indexOf(v.gear);
-                        v.gear = gears[(idx + 1) % gears.length];
-                        playSfx(300 + v.gear * 60, 'triangle', 0.1, 0.05);
-                    }
+                const v = eng.vehicles.find(v => v.id === eng.player.vehicleId);
+                if (v && !v.isWreck) {
+                    const gears = [-1, 1, 2, 3, 4];
+                    v.gear = gears[(gears.indexOf(v.gear) + 1) % gears.length];
+                    playSfx(300 + v.gear * 50, 'triangle', 0.1, 0.05);
                 }
             };
 
@@ -143,24 +147,17 @@
                 const eng = engine.current;
                 if (eng.player.vehicleId) {
                     const v = eng.vehicles.find(v => v.id === eng.player.vehicleId);
-                    if (v) {
-                        eng.player.vehicleId = null; v.driver = null;
-                        eng.player.pos.x += Math.cos(v.angle + Math.PI/2) * 95;
-                        eng.player.pos.y += Math.sin(v.angle + Math.PI/2) * 95;
-                    }
+                    if (v) { eng.player.vehicleId = null; v.driver = null; eng.player.pos.x += Math.cos(v.angle + Math.PI/2) * 100; eng.player.pos.y += Math.sin(v.angle + Math.PI/2) * 100; }
                 } else {
-                    const v = eng.vehicles.find(v => !v.isWreck && Math.hypot(v.pos.x - eng.player.pos.x, v.pos.y - eng.player.pos.y) < 100);
+                    const v = eng.vehicles.find(v => !v.isWreck && Math.hypot(v.pos.x - eng.player.pos.x, v.pos.y - eng.player.pos.y) < 110);
                     if (v) { eng.player.vehicleId = v.id; v.driver = 'player'; }
                 }
-            };
-
-            const spawnParticle = (pos, vel, color, life, size) => {
-                engine.current.particles.push({ pos: { ...pos }, vel, color, life, size });
             };
 
             const loop = (time) => {
                 const dt = Math.min(2.0, (time - engine.current.lastTime) / 16.67);
                 engine.current.lastTime = time;
+                engine.current.lightCycle = (engine.current.lightCycle + dt) % 600;
                 for (let i = 0; i < 4; i++) updatePhysics(dt / 4);
                 render();
                 requestAnimationFrame(loop);
@@ -177,108 +174,110 @@
                 if (p.vehicleId) {
                     const v = eng.vehicles.find(v => v.id === p.vehicleId);
                     if (v && !v.isWreck) {
-                        const gearTorque = [0, 1.2, 0.8, 0.5, 0.3];
-                        const gearMax = [0, 4.5, 8.5, 12.0, 16.0];
+                        const gearT = [0, 1.4, 0.9, 0.6, 0.4]; const gearM = [0, 5, 9, 13, 18];
                         if (v.gear === -1) {
-                            if (eng.keys['KeyW']) v.speed -= VEHICLE_ACCEL_BASE * 0.4 * dt;
-                            if (eng.keys['KeyS']) v.speed += VEHICLE_ACCEL_BASE * 0.2 * dt;
-                            v.speed = Math.max(-4.0, v.speed);
+                            if (eng.keys['KeyW']) v.speed -= 0.2 * dt; if (eng.keys['KeyS']) v.speed += 0.1 * dt;
+                            v.speed = Math.max(-5, v.speed);
                         } else {
-                            if (eng.keys['KeyW']) v.speed += VEHICLE_ACCEL_BASE * gearTorque[v.gear] * dt;
-                            if (eng.keys['KeyS']) v.speed -= VEHICLE_ACCEL_BASE * 0.7 * dt;
-                            v.speed = Math.min(gearMax[v.gear], v.speed);
+                            if (eng.keys['KeyW']) v.speed += VEHICLE_ACCEL_BASE * gearT[v.gear] * dt;
+                            if (eng.keys['KeyS']) v.speed -= 0.6 * dt;
+                            v.speed = Math.min(gearM[v.gear], v.speed);
                         }
-                        const turnFac = Math.min(1, Math.abs(v.speed) / 4);
-                        if (eng.keys['KeyA']) v.angle -= VEHICLE_TURN_SPEED * turnFac * dt;
-                        if (eng.keys['KeyD']) v.angle += VEHICLE_TURN_SPEED * turnFac * dt;
+                        const turnMult = Math.min(1, Math.abs(v.speed) / 4);
+                        if (eng.keys['KeyA']) v.angle -= VEHICLE_TURN_SPEED * turnMult * dt;
+                        if (eng.keys['KeyD']) v.angle += VEHICLE_TURN_SPEED * turnMult * dt;
                         v.speed *= Math.pow(DRAG, dt);
-                        v.pos.x += Math.cos(v.angle) * v.speed * dt;
-                        v.pos.y += Math.sin(v.angle) * v.speed * dt;
+                        v.pos.x += Math.cos(v.angle) * v.speed * dt; v.pos.y += Math.sin(v.angle) * v.speed * dt;
                         p.pos = { ...v.pos }; p.angle = v.angle;
                         checkWall(v);
                     }
+                } else if (p.state === 'rolling') {
+                    p.pos.x += Math.cos(p.angle) * ROLL_SPEED * dt;
+                    p.pos.y += Math.sin(p.angle) * ROLL_SPEED * dt;
+                    p.rollTimer -= dt;
+                    if (p.rollTimer <= 0) p.state = 'idle';
+                    checkWall(p);
                 } else {
-                    const speed = eng.keys['ShiftLeft'] ? PLAYER_WALK_SPEED : PLAYER_RUN_SPEED;
+                    const isWalking = eng.keys['ShiftLeft'];
+                    const speed = isWalking ? PLAYER_WALK_SPEED : PLAYER_RUN_SPEED;
                     let mx = 0, my = 0;
                     if (eng.keys['KeyW']) my -= 1; if (eng.keys['KeyS']) my += 1;
                     if (eng.keys['KeyA']) mx -= 1; if (eng.keys['KeyD']) mx += 1;
                     if (mx !== 0 || my !== 0) {
                         const ang = Math.atan2(my, mx);
-                        p.pos.x += Math.cos(ang) * speed * dt;
-                        p.pos.y += Math.sin(ang) * speed * dt;
+                        p.pos.x += Math.cos(ang) * speed * dt; p.pos.y += Math.sin(ang) * speed * dt;
                         if (!p.isAiming) p.angle = ang;
+                        if (!isWalking) { 
+                            p.stamina = Math.max(0, p.stamina - STAMINA_RUN_COST * dt); 
+                            if (Math.random() < 0.1) playSfx(60, 'sine', 0.05, 0.005);
+                        } else {
+                            p.stamina = Math.min(100, p.stamina + STAMINA_REGEN * dt);
+                        }
+                    } else {
+                        p.stamina = Math.min(100, p.stamina + STAMINA_REGEN * dt);
                     }
-                    if (p.isAiming) {
-                        const canvas = canvasRef.current;
-                        if (canvas) p.angle = Math.atan2(eng.mouse.y - canvas.height/2, eng.mouse.x - canvas.width/2);
-                    }
+                    if (p.isAiming) { const c = canvasRef.current; if (c) p.angle = Math.atan2(eng.mouse.y - c.height/2, eng.mouse.x - c.width/2); }
                     if (eng.mouse.left) fireWeapon(p);
+                    if (p.swingTimer > 0) p.swingTimer -= dt;
                     checkWall(p);
                 }
 
-                // AI NPC & Projectiles logic
+                // NPC AI & Collisions
                 eng.peds.forEach(npc => {
                     npc.walkTimer -= dt;
-                    if (npc.walkTimer <= 0) { npc.angle = Math.random() * Math.PI * 2; npc.walkTimer = 150 + Math.random() * 250; }
-                    npc.pos.x += Math.cos(npc.angle) * 1.6 * dt; npc.pos.y += Math.sin(npc.angle) * 1.6 * dt;
+                    if (npc.walkTimer <= 0) { npc.angle = Math.random() * Math.PI * 2; npc.walkTimer = 150 + Math.random() * 300; }
+                    npc.pos.x += Math.cos(npc.angle) * 1.8 * dt; npc.pos.y += Math.sin(npc.angle) * 1.8 * dt;
                     checkWall(npc);
                 });
 
-                eng.vehicles.forEach(v => {
-                    if (v.isWreck) {
-                        if (v.burnTime > 0) { v.burnTime -= dt; if (Math.random() < 0.2) spawnParticle(v.pos, { x: (Math.random()-0.5)*2, y: -Math.random()*3 }, COLORS.FIRE, 25, 6); }
-                        return;
-                    }
-                    if (v.driver === 'npc') {
-                        v.speed = Math.min(v.speed + 0.1 * dt, 3.2);
-                        v.pos.x += Math.cos(v.angle) * v.speed * dt; v.pos.y += Math.sin(v.angle) * v.speed * dt;
-                        const tx = Math.floor((v.pos.x + Math.cos(v.angle) * 110) / TILE_SIZE);
-                        const ty = Math.floor((v.pos.y + Math.sin(v.angle) * 110) / TILE_SIZE);
-                        if (eng.map[ty]?.[tx] !== 1) v.angle += 0.06 * dt;
-                        checkWall(v);
-                    }
-                });
-
                 eng.projectiles = eng.projectiles.filter(pr => {
-                    pr.pos.x += pr.vel.x * dt; pr.pos.y += pr.vel.y * dt;
-                    pr.life -= dt;
+                    pr.pos.x += pr.vel.x * dt; pr.pos.y += pr.vel.y * dt; pr.life -= dt;
                     let hit = false;
                     [...eng.peds, p].forEach(target => {
                         if (target.id === pr.owner || target.health <= 0) return;
                         if (Math.hypot(target.pos.x - pr.pos.x, target.pos.y - pr.pos.y) < target.radius + pr.radius) {
                             target.health -= pr.damage; hit = true;
-                            if (target.health <= 0) for(let i=0; i<6; i++) spawnParticle(target.pos, { x: (Math.random()-0.5)*5, y: (Math.random()-0.5)*5 }, 'red', 35, 3);
+                            if (target.health <= 0) for(let i=0; i<6; i++) eng.particles.push({ pos: { ...target.pos }, vel: { x: (Math.random()-0.5)*5, y: (Math.random()-0.5)*5 }, color: 'red', life: 30, size: 3 });
                         }
                     });
                     eng.vehicles.forEach(v => {
                         if (v.isWreck || Math.hypot(v.pos.x - pr.pos.x, v.pos.y - pr.pos.y) > v.radius) return;
-                        v.health -= pr.damage; hit = true;
-                        applyCrumple(v);
+                        v.health -= pr.damage; hit = true; applyCrumple(v);
                         if (v.health <= 0) destroyVehicle(v);
                     });
                     return !hit && pr.life > 0;
                 });
 
-                eng.peds = eng.peds.filter(npc => npc.health > 0);
                 resolveCollisions(dt);
-                
                 eng.particles.forEach(pa => { pa.pos.x += pa.vel.x * dt; pa.pos.y += pa.vel.y * dt; pa.life -= dt; });
                 eng.particles = eng.particles.filter(pa => pa.life > 0);
+                eng.peds = eng.peds.filter(npc => npc.health > 0);
 
                 onUpdate({ player: p, score: eng.score, vehicle: eng.vehicles.find(v => v.id === p.vehicleId) });
             };
 
-            const applyCrumple = (v) => {
-                v.crumpleOffsets = v.crumpleOffsets.map(o => ({
-                    x: o.x + (Math.random() - 0.5) * 6,
-                    y: o.y + (Math.random() - 0.5) * 6
-                }));
-            };
+            const fireWeapon = (p) => {
+                const eng = engine.current;
+                const config = WEAPONS[p.weapon];
+                if (Date.now() - p.lastShot < config.cooldown * 16) return;
+                p.lastShot = Date.now();
 
-            const destroyVehicle = (v) => {
-                v.isWreck = true; v.speed = 0; v.burnTime = 150;
-                playSfx(100, 'sawtooth', 0.6, 0.2);
-                for(let i=0; i<20; i++) spawnParticle(v.pos, { x: (Math.random()-0.5)*8, y: (Math.random()-0.5)*8 }, COLORS.FIRE, 40, 10);
+                if (p.weapon === WeaponType.FIST) {
+                    p.swingTimer = 10; p.swingSide *= -1;
+                    playSfx(200, 'square', 0.1, 0.1);
+                    eng.peds.forEach(target => {
+                        const dist = Math.hypot(target.pos.x - p.pos.x, target.pos.y - p.pos.y);
+                        const ang = Math.atan2(target.pos.y - p.pos.y, target.pos.x - p.pos.x);
+                        const diff = Math.abs(((ang - p.angle + Math.PI*3) % (Math.PI*2)) - Math.PI);
+                        if (dist < 80 && diff < 1.2) {
+                            target.health -= config.damage;
+                            if (target.health <= 0) for(let i=0; i<6; i++) eng.particles.push({ pos: { ...target.pos }, vel: { x: (Math.random()-0.5)*5, y: (Math.random()-0.5)*5 }, color: 'red', life: 30, size: 3 });
+                        }
+                    });
+                } else {
+                    playSfx(600, 'sawtooth', 0.1, 0.1);
+                    eng.projectiles.push({ pos: { ...p.pos }, vel: { x: Math.cos(p.angle) * 30, y: Math.sin(p.angle) * 30 }, owner: 'player', life: config.range / 30, radius: 4, damage: config.damage });
+                }
             };
 
             const checkWall = (ent) => {
@@ -295,13 +294,7 @@
                             if (d < ent.radius && d > 0) {
                                 ent.pos.x += (dx/d) * (ent.radius - d);
                                 ent.pos.y += (dy/d) * (ent.radius - d);
-                                if (ent.speed) { 
-                                    const damage = Math.abs(ent.speed) * 4;
-                                    ent.health -= damage;
-                                    if (ent.health > 0) applyCrumple(ent);
-                                    if (ent.health <= 0 && !ent.isWreck) destroyVehicle(ent);
-                                    ent.speed *= -0.4;
-                                }
+                                if (ent.speed) { ent.health -= Math.abs(ent.speed) * 3; applyCrumple(ent); if (ent.health <= 0) destroyVehicle(ent); ent.speed *= -0.4; }
                             }
                         }
                     }
@@ -310,106 +303,124 @@
 
             const resolveCollisions = (dt) => {
                 const eng = engine.current;
-                const allV = eng.vehicles;
-                for(let i=0; i<allV.length; i++) {
-                    for(let j=i+1; j<allV.length; j++) {
-                        const a = allV[i], b = allV[j];
-                        const dx = b.pos.x - a.pos.x, dy = b.pos.y - a.pos.y;
-                        const dist = Math.hypot(dx, dy);
-                        const minDist = (a.radius + b.radius) * 0.95;
-                        if (dist < minDist) {
-                            const overlap = minDist - dist;
-                            const nx = dx/dist, ny = dy/dist;
-                            a.pos.x -= nx * overlap * 0.5; a.pos.y -= ny * overlap * 0.5;
-                            b.pos.x += nx * overlap * 0.5; b.pos.y += ny * overlap * 0.5;
-                            const rel = a.speed - b.speed;
-                            if (Math.abs(rel) > 2.5) { a.health -= 10; b.health -= 10; applyCrumple(a); applyCrumple(b); }
-                            a.speed -= rel * 0.45; b.speed += rel * 0.45;
+                const p = eng.player;
+                eng.vehicles.forEach(v => {
+                    [...eng.peds, p].forEach(target => {
+                        if (target.id === 'player' && p.vehicleId === v.id) return;
+                        if (target.health <= 0) return;
+                        const d = Math.hypot(target.pos.x - v.pos.x, target.pos.y - v.pos.y);
+                        const minDist = v.radius + target.radius - 8;
+                        if (d < minDist) {
+                            const overlap = minDist - d;
+                            const nx = (target.pos.x - v.pos.x) / d, ny = (target.pos.y - v.pos.y) / d;
+                            target.pos.x += nx * overlap; target.pos.y += ny * overlap;
+                            if (Math.abs(v.speed) > 2.0) {
+                                target.health -= Math.abs(v.speed) * 20;
+                                if (target.health <= 0) for(let i=0; i<8; i++) eng.particles.push({ pos: { ...target.pos }, vel: { x: (Math.random()-0.5)*5, y: (Math.random()-0.5)*5 }, color: 'red', life: 30, size: 4 });
+                            }
                         }
-                    }
-                }
+                    });
+                });
             };
 
-            const fireWeapon = (p) => {
-                const eng = engine.current;
-                const config = WEAPONS[p.weapon];
-                if (Date.now() - p.lastShot < config.cooldown * 16) return;
-                p.lastShot = Date.now();
-                playSfx(p.weapon === WeaponType.SNIPER ? 380 : 650, 'sawtooth', 0.1, 0.1);
-                eng.projectiles.push({ pos: { ...p.pos }, vel: { x: Math.cos(p.angle) * 28, y: Math.sin(p.angle) * 28 }, owner: p.id, life: config.range / 28, radius: 4, damage: config.damage });
-            };
+            const applyCrumple = (v) => { v.crumpleOffsets = v.crumpleOffsets.map(o => ({ x: o.x + (Math.random()-0.5)*8, y: o.y + (Math.random()-0.5)*8 })); };
+            const destroyVehicle = (v) => { v.isWreck = true; v.speed = 0; v.burnTime = 160; playSfx(100, 'sawtooth', 0.6, 0.2); };
 
             const render = () => {
                 const canvas = canvasRef.current; if (!canvas) return;
                 const ctx = canvas.getContext('2d');
                 const eng = engine.current; const p = eng.player;
-
                 canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+
                 const currentV = eng.vehicles.find(v => v.id === p.vehicleId);
-                const targetZoom = p.vehicleId ? (0.6 - Math.abs(currentV?.speed || 0) * 0.02) : (1.0 - p.aimProg * 0.45);
+                const targetZoom = p.vehicleId ? (0.55 - Math.abs(currentV?.speed || 0) * 0.02) : (0.9 - p.aimProg * 0.4);
                 eng.camera.zoom += (targetZoom - eng.camera.zoom) * 0.1;
 
                 ctx.fillStyle = '#0a0a1a'; ctx.fillRect(0,0, canvas.width, canvas.height);
-
                 ctx.save();
                 ctx.translate(canvas.width/2, canvas.height/2);
                 ctx.scale(eng.camera.zoom, eng.camera.zoom);
                 ctx.translate(-p.pos.x, -p.pos.y);
 
-                // 지형
+                // 지도
                 for (let y = 0; y < CITY_SIZE; y++) {
                     for (let x = 0; x < CITY_SIZE; x++) {
                         const t = eng.map[y][x]; const px = x * TILE_SIZE, py = y * TILE_SIZE;
-                        if (t === 1) { ctx.fillStyle = COLORS.ROAD; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE); }
+                        if (t === 1) { 
+                            ctx.fillStyle = COLORS.ROAD; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+                            // 중앙선
+                            ctx.strokeStyle = 'rgba(255,255,0,0.5)'; ctx.setLineDash([20, 20]); ctx.lineWidth = 4;
+                            ctx.beginPath(); ctx.moveTo(px + TILE_SIZE/2, py); ctx.lineTo(px + TILE_SIZE/2, py + TILE_SIZE); ctx.stroke();
+                            ctx.beginPath(); ctx.moveTo(px, py + TILE_SIZE/2); ctx.lineTo(px + TILE_SIZE, py + TILE_SIZE/2); ctx.stroke();
+                            ctx.setLineDash([]);
+                        }
                         else if (t === 2) { ctx.fillStyle = COLORS.SIDEWALK; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE); }
-                        else if (t === 3) { ctx.fillStyle = COLORS.BUILDING; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE); ctx.fillStyle = COLORS.BUILDING_TOP; ctx.fillRect(px+12, py+12, TILE_SIZE-24, TILE_SIZE-24); }
+                        else if (t === 3) { ctx.fillStyle = COLORS.BUILDING; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE); ctx.fillStyle = COLORS.BUILDING_TOP; ctx.fillRect(px+15, py+15, TILE_SIZE-30, TILE_SIZE-30); }
                     }
                 }
 
-                // 차량 라이트 효과를 위한 오프스크린 느낌의 레이어 (단순화된 구현)
-                eng.vehicles.forEach(v => {
-                    if (v.isWreck) return;
-                    ctx.save(); ctx.translate(v.pos.x, v.pos.y); ctx.rotate(v.angle);
-                    if (v.speed > 0 || v.driver) { // 전조등
-                        const beam = ctx.createRadialGradient(50, 0, 0, 150, 0, 200);
-                        beam.addColorStop(0, 'rgba(255, 255, 220, 0.4)'); beam.addColorStop(1, 'rgba(255, 255, 220, 0)');
-                        ctx.fillStyle = beam; ctx.beginPath(); ctx.moveTo(40, -10); ctx.lineTo(250, -80); ctx.lineTo(250, 80); ctx.lineTo(40, 10); ctx.fill();
+                // 횡단보도 & 신호등
+                for (let y = 0; y < CITY_SIZE; y+=8) {
+                    for (let x = 0; x < CITY_SIZE; x+=8) {
+                        const px = x * TILE_SIZE, py = y * TILE_SIZE;
+                        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                        for(let i=0; i<5; i++) {
+                            ctx.fillRect(px + TILE_SIZE + i*25, py + TILE_SIZE + 10, 15, 60);
+                            ctx.fillRect(px + 10, py + TILE_SIZE + i*25 + TILE_SIZE, 60, 15);
+                        }
+                        // 신호등
+                        const lightCol = eng.lightCycle < 300 ? 'red' : 'green';
+                        ctx.fillStyle = '#222'; ctx.fillRect(px+TILE_SIZE-20, py+TILE_SIZE-20, 40, 40);
+                        ctx.fillStyle = lightCol; ctx.beginPath(); ctx.arc(px+TILE_SIZE, py+TILE_SIZE, 10, 0, Math.PI*2); ctx.fill();
                     }
-                    ctx.restore();
-                });
+                }
 
-                // 차량 본체 (찌그러짐 포함)
+                // 차량
                 eng.vehicles.forEach(v => {
                     ctx.save(); ctx.translate(v.pos.x, v.pos.y); ctx.rotate(v.angle);
                     ctx.fillStyle = v.isWreck ? COLORS.WRECK : v.color;
-                    const w = 45, h = 24;
-                    ctx.beginPath();
-                    ctx.moveTo(-w + v.crumpleOffsets[0].x, -h + v.crumpleOffsets[0].y);
-                    ctx.lineTo(w + v.crumpleOffsets[1].x, -h + v.crumpleOffsets[1].y);
-                    ctx.lineTo(w + v.crumpleOffsets[2].x, h + v.crumpleOffsets[2].y);
-                    ctx.lineTo(-w + v.crumpleOffsets[3].x, h + v.crumpleOffsets[3].y);
-                    ctx.closePath(); ctx.fill();
-                    if (!v.isWreck) {
-                        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(-15, -18, 45, 36);
-                        if (v.gear === -1) { ctx.fillStyle = 'white'; ctx.fillRect(-48, -20, 8, 8); ctx.fillRect(-48, 12, 8, 8); }
-                        else { ctx.fillStyle = 'red'; ctx.fillRect(-48, -20, 6, 8); ctx.fillRect(-48, 12, 6, 8); }
+                    const w = 45, h = 26;
+                    ctx.beginPath(); ctx.moveTo(-w+v.crumpleOffsets[0].x, -h+v.crumpleOffsets[0].y); ctx.lineTo(w+v.crumpleOffsets[1].x, -h+v.crumpleOffsets[1].y); ctx.lineTo(w+v.crumpleOffsets[2].x, h+v.crumpleOffsets[2].y); ctx.lineTo(-w+v.crumpleOffsets[3].x, h+v.crumpleOffsets[3].y); ctx.closePath(); ctx.fill();
+                    if (!v.isWreck) { 
+                        ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(-15, -18, 45, 36); 
+                        // 라이트
+                        ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.shadowBlur = 15; ctx.shadowColor = 'white'; ctx.fillRect(40, -22, 10, 10); ctx.fillRect(40, 12, 10, 10); ctx.shadowBlur = 0;
                     }
                     ctx.restore();
                 });
 
-                // NPC & 투사체
-                eng.peds.forEach(e => { ctx.fillStyle = COLORS.PED; ctx.beginPath(); ctx.arc(e.pos.x, e.pos.y, e.radius, 0, Math.PI*2); ctx.fill(); });
-                eng.projectiles.forEach(pr => { ctx.fillStyle = '#ff0'; ctx.shadowBlur = 12; ctx.shadowColor = '#ff0'; ctx.beginPath(); ctx.arc(pr.pos.x, pr.pos.y, pr.radius, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0; });
-                eng.particles.forEach(pa => { ctx.fillStyle = pa.color; ctx.globalAlpha = pa.life/40; ctx.beginPath(); ctx.arc(pa.pos.x, pa.pos.y, pa.size, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1; });
+                // NPC & 플레이어
+                const renderChar = (c, isP) => {
+                    ctx.save(); ctx.translate(c.pos.x, c.pos.y); ctx.rotate(c.angle);
+                    ctx.fillStyle = isP ? COLORS.PLAYER : COLORS.PED;
+                    ctx.beginPath(); ctx.arc(0,0, c.radius, 0, Math.PI*2); ctx.fill();
+                    // 방향 지시
+                    ctx.fillStyle = 'black'; ctx.fillRect(12, -3, 8, 6);
+                    // 주먹 휘두르기 애니메이션
+                    if (isP && c.swingTimer > 0) {
+                        ctx.fillStyle = COLORS.PLAYER;
+                        const offset = Math.sin(c.swingTimer * 0.5) * 20;
+                        ctx.beginPath(); ctx.arc(15 + offset, 12 * c.swingSide, 8, 0, Math.PI*2); ctx.fill();
+                    } else if (isP) {
+                        ctx.fillStyle = COLORS.PLAYER;
+                        ctx.beginPath(); ctx.arc(12, 12, 6, 0, Math.PI*2); ctx.fill();
+                        ctx.beginPath(); ctx.arc(12, -12, 6, 0, Math.PI*2); ctx.fill();
+                    }
+                    ctx.restore();
+                };
+                eng.peds.forEach(ped => renderChar(ped, false));
+                if (!p.vehicleId) renderChar(p, true);
 
-                if (!p.vehicleId) { ctx.save(); ctx.translate(p.pos.x, p.pos.y); ctx.rotate(p.angle); ctx.fillStyle = COLORS.PLAYER; ctx.beginPath(); ctx.arc(0,0, p.radius, 0, Math.PI*2); ctx.fill(); ctx.restore(); }
+                eng.projectiles.forEach(pr => { ctx.fillStyle = '#ff0'; ctx.shadowBlur = 12; ctx.shadowColor = '#ff0'; ctx.beginPath(); ctx.arc(pr.pos.x, pr.pos.y, pr.radius, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0; });
+                eng.particles.forEach(pa => { ctx.fillStyle = pa.color; ctx.globalAlpha = pa.life/30; ctx.beginPath(); ctx.arc(pa.pos.x, pa.pos.y, pa.size, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1; });
 
                 ctx.restore();
 
-                // 안개 마스크
-                const vision = (p.isAiming ? 800 : (p.vehicleId ? 550 : 350)) / eng.camera.zoom;
+                // 안개 마스크 (조준 시 살짝 밝게)
+                const vision = (p.isAiming ? 1000 : (p.vehicleId ? 600 : 400)) / eng.camera.zoom;
+                const alpha = p.isAiming ? 0.75 : 0.94;
                 const grad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, vision*0.3, canvas.width/2, canvas.height/2, vision*1.8);
-                grad.addColorStop(0, 'transparent'); grad.addColorStop(1, COLORS.MIST);
+                grad.addColorStop(0, 'transparent'); grad.addColorStop(1, `rgba(0,0,0,${alpha})`);
                 ctx.fillStyle = grad; ctx.fillRect(0,0, canvas.width, canvas.height);
 
                 if (p.isAiming) {
@@ -418,57 +429,44 @@
                     ctx.moveTo(eng.mouse.x, eng.mouse.y - 40); ctx.lineTo(eng.mouse.x, eng.mouse.y + 40); ctx.stroke();
                 }
             };
-
             return React.createElement('canvas', { ref: canvasRef, className: 'cursor-none' });
         };
 
-        // --- 상위 앱 컴포넌트 ---
         const App = () => {
             const [gameKey, setGameKey] = useState(0);
-            const [state, setState] = useState({ player: { health: 100, weapon: WeaponType.FIST }, score: 0, vehicle: null });
-            const weapons = [WeaponType.FIST, WeaponType.PISTOL, WeaponType.UZI, WeaponType.SNIPER, WeaponType.GRENADE];
+            const [state, setState] = useState({ player: { health: 100, stamina: 100, weapon: WeaponType.FIST }, score: 0, vehicle: null });
+            const weapons = [WeaponType.FIST, WeaponType.PISTOL, WeaponType.UZI, WeaponType.GRENADE];
 
             return React.createElement('div', { className: 'relative w-screen h-screen bg-black text-white overflow-hidden font-mono select-none' },
                 React.createElement(GameCanvas, { key: gameKey, gameKey, onUpdate: setState }),
-                // HUD - MONEY
                 React.createElement('div', { className: 'absolute top-6 left-6 flex flex-col gap-4 ui-element' },
-                    React.createElement('div', { className: 'bg-black/90 border-l-8 border-green-600 px-6 py-2 text-green-400 text-5xl font-black italic shadow-[8px_0_0_0_#166534]' },
-                        `$ ${state.score.toString().padStart(8, '0')}`
-                    ),
-                    React.createElement('div', { className: 'w-80 h-6 bg-gray-950 border-2 border-white/20 rounded-sm p-1' },
-                        React.createElement('div', { className: 'h-full bg-red-600 shadow-[0_0_15px_red] transition-all', style: { width: `${Math.max(0, state.player.health)}%` } })
+                    React.createElement('div', { className: 'bg-black/90 border-l-8 border-green-600 px-6 py-2 text-green-400 text-5xl font-black italic shadow-[8px_0_0_0_#166534]' }, `$ ${state.score.toString().padStart(8, '0')}`),
+                    React.createElement('div', { className: 'w-80 space-y-2' },
+                        React.createElement('div', { className: 'h-6 bg-gray-950 border-2 border-white/20 rounded-sm p-1' }, React.createElement('div', { className: 'h-full bg-red-600 shadow-[0_0_15px_red]', style: { width: `${Math.max(0, state.player.health)}%` } })),
+                        React.createElement('div', { className: 'h-3 bg-gray-950 border-2 border-white/20 rounded-sm p-0.5' }, React.createElement('div', { className: 'h-full bg-blue-500 shadow-[0_0_10px_blue]', style: { width: `${state.player.stamina}%` } }))
                     )
                 ),
-                // WEAPONS
                 React.createElement('div', { className: 'absolute top-6 right-6 flex gap-2 p-2 bg-black/60 border-b-4 border-yellow-600 rounded-lg ui-element' },
                     weapons.map((w, i) => React.createElement('div', { key: w, className: `w-20 h-20 flex flex-col items-center justify-center border-2 ${state.player.weapon === w ? 'border-yellow-400 bg-yellow-400/20 scale-110' : 'border-white/10'}` },
-                        React.createElement('div', { className: 'text-[10px] opacity-40' }, i+1),
-                        React.createElement('div', { className: 'text-[10px] font-bold' }, w)
+                        React.createElement('div', { className: 'text-[10px] opacity-40' }, i+1), React.createElement('div', { className: 'text-[10px] font-bold' }, w)
                     ))
                 ),
-                // VEHICLE HUD
                 state.vehicle && React.createElement('div', { className: 'absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center ui-element bg-black/80 p-4 border-t-4 border-white rounded-t-xl min-w-[240px]' },
                     React.createElement('div', { className: 'text-white text-xs opacity-50' }, 'GEAR'),
                     React.createElement('div', { className: 'text-4xl font-black italic text-yellow-400' }, state.vehicle.gear === -1 ? 'R' : state.vehicle.gear),
-                    React.createElement('div', { className: 'text-5xl font-black italic mt-2' },
-                        `${Math.floor(Math.abs(state.vehicle.speed) * 26)} `,
-                        React.createElement('span', { className: 'text-xl opacity-30' }, 'KM/H')
-                    )
+                    React.createElement('div', { className: 'text-5xl font-black italic mt-2' }, `${Math.floor(Math.abs(state.vehicle.speed) * 26)} `, React.createElement('span', { className: 'text-xl opacity-30' }, 'KM/H'))
                 ),
-                // GUIDE
                 React.createElement('div', { className: 'absolute bottom-6 left-6 text-[11px] font-bold opacity-40 bg-black/40 p-2 rounded border-l-2 border-white/20 ui-element' },
-                    'WASD: 이동/운전 | F: 탑승/하차 | E: 기어변속 | L-CLICK: 사격 | R-CLICK: 조준(줌)'
+                    'WASD: 이동 | F: 하차 | E: 기어 | Shift: 걷기(무소음/회복) | Space: 구르기 | L-CLICK: 공격 | R-CLICK: 조준'
                 ),
-                // WASTED
                 state.player.health <= 0 && React.createElement('div', { className: 'absolute inset-0 bg-red-950/90 flex flex-col items-center justify-center z-50 animate-fade-in backdrop-blur-md' },
                     React.createElement('h1', { className: 'text-9xl font-black mb-12 skew-x-[-10deg]' }, 'WASTED'),
-                    React.createElement('button', { className: 'px-12 py-4 bg-white text-red-950 font-black text-2xl hover:scale-110 transition-all pointer-events-auto', onClick: () => setGameKey(k => k+1) }, 'RESPAWN')
+                    React.createElement('button', { className: 'px-12 py-4 bg-white text-red-950 font-black text-2xl hover:scale-110 pointer-events-auto', onClick: () => setGameKey(k => k+1) }, 'RESPAWN')
                 )
             );
         };
 
-        const root = createRoot(document.getElementById('root'));
-        root.render(React.createElement(App));
+        createRoot(document.getElementById('root')).render(React.createElement(App));
     </script>
 </body>
 </html>
