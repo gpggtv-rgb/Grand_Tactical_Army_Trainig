@@ -4,12 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Grand Tactical Army Training - VER.0.0.4</title>
-    <!-- Anti-Cache Meta Tags -->
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
-    
+    <title>Grand Tactical Army Training - VER.0.0.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; font-family: 'Courier New', Courier, monospace; }
@@ -22,15 +17,13 @@
             100% { transform: scale(1) skewX(-18deg); opacity: 1; }
         }
         .animate-wasted { animation: wasted-text 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-        @keyframes pulse-fast { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .animate-pulse-fast { animation: pulse-fast 0.2s infinite; }
         .cursor-none { cursor: none; }
     </style>
     <script type="importmap">
     {
       "imports": {
-        "react": "https://esm.sh/react@^19.2.3",
-        "react-dom/client": "https://esm.sh/react-dom@^19.2.3/client"
+        "react": "https://esm.sh/react@19.0.0",
+        "react-dom/client": "https://esm.sh/react-dom@19.0.0/client"
       }
     }
     </script>
@@ -45,20 +38,20 @@
         const TILE_SIZE = 240; 
         const CITY_SIZE = 40;
         const DRAG = 0.985;
-        const PLAYER_RUN_SPEED = 5.7;
-        const PLAYER_WALK_SPEED = 2.8;
-        const ROLL_SPEED = 13.5;
-        const ROLL_DURATION = 22; 
-        const STAMINA_REGEN = 0.5;
-        const STAMINA_RUN_COST = 0.35;
-        const THROW_CHARGE_RATE = 0.045; 
-        const MAX_THROW_DIST = 5.2;
+        const PLAYER_RUN_SPEED = 5.5;
+        const PLAYER_WALK_SPEED = 2.6;
+        const ROLL_SPEED = 13.0;
+        const ROLL_DURATION = 24; 
+        const STAMINA_REGEN = 0.45;
+        const STAMINA_RUN_COST = 0.3;
+        const THROW_CHARGE_RATE = 0.04; 
+        const MAX_THROW_DIST = 5.0;
+        const MIN_THROW_DIST = 0.5;
 
         const COLORS = {
-            ROAD: '#181818', SIDEWALK: '#2a2a2a', BUILDING: '#0d0d1a', BUILDING_TOP: '#151525',
-            PLAYER: '#ff00ff', PED: '#ffffff', WRECK: '#030303',
-            BLOOD: 'rgba(255, 0, 0, 0.6)', SHADOW: 'rgba(0, 0, 0, 0.55)',
-            ACCENT: '#ff00ff'
+            ROAD: '#1a1a1a', SIDEWALK: '#333333', BUILDING: '#111122', BUILDING_TOP: '#1a1a2e',
+            PLAYER: '#00ffcc', PED: '#ffffff', WRECK: '#050505',
+            BLOOD: 'rgba(200, 0, 0, 0.7)', SHADOW: 'rgba(0, 0, 0, 0.5)'
         };
 
         const WeaponTypes = { MELEE: 'MELEE', PISTOL: 'PISTOL', RIFLE: 'RIFLE', THROWABLE: 'THROWABLE' };
@@ -66,19 +59,19 @@
         const WEAPON_DATA = {
             [WeaponTypes.MELEE]: {
                 FIST: { name: 'FIST', damage: 35, cooldown: 20, range: 85, zoomBonus: 0.05, color: '#fca5a5' },
-                BAT: { name: 'BAT', damage: 70, cooldown: 24, range: 110, zoomBonus: 0.05, color: '#fde68a' }
+                BAT: { name: 'BAT', damage: 65, cooldown: 26, range: 105, zoomBonus: 0.05, color: '#fde68a' }
             },
             [WeaponTypes.PISTOL]: {
-                GLOCK: { name: 'GLOCK', damage: 36, cooldown: 13, zoomBonus: 0.4, color: '#93c5fd' },
-                DEAGLE: { name: 'DEAGLE', damage: 105, cooldown: 42, zoomBonus: 0.45, color: '#6366f1' }
+                GLOCK: { name: 'GLOCK', damage: 34, cooldown: 14, zoomBonus: 0.4, color: '#93c5fd' },
+                DEAGLE: { name: 'DEAGLE', damage: 98, cooldown: 40, zoomBonus: 0.45, color: '#6366f1' }
             },
             [WeaponTypes.RIFLE]: {
-                AK47: { name: 'AK-47', damage: 40, cooldown: 7, zoomBonus: 0.6, color: '#f87171' },
-                M249: { name: 'M249', damage: 35, cooldown: 5, zoomBonus: 0.65, color: '#fb923c' }
+                AK47: { name: 'AK-47', damage: 38, cooldown: 7, zoomBonus: 0.6, color: '#f87171' },
+                M249: { name: 'M249', damage: 32, cooldown: 5, zoomBonus: 0.65, color: '#fb923c' }
             },
             [WeaponTypes.THROWABLE]: {
-                GRENADE: { name: 'GRENADE', damage: 750, radius: 300, zoomBonus: 0.3, color: '#4ade80' },
-                MOLOTOV: { name: 'MOLOTOV', damage: 60, radius: 200, zoomBonus: 0.3, color: '#fbbf24' }
+                GRENADE: { name: 'GRENADE', damage: 600, radius: 280, zoomBonus: 0.3, color: '#4ade80' },
+                MOLOTOV: { name: 'MOLOTOV', damage: 55, radius: 190, zoomBonus: 0.3, color: '#fbbf24' }
             }
         };
 
@@ -118,9 +111,9 @@
                     id: 'player', pos: { x: TILE_SIZE * 6.5, y: TILE_SIZE * 6.5 }, angle: 0, health: 100, stamina: 100,
                     inventory: {
                         [WeaponTypes.MELEE]: { key: 'FIST', durability: Infinity },
-                        [WeaponTypes.PISTOL]: { key: 'GLOCK', ammo: 300 },
-                        [WeaponTypes.RIFLE]: { key: 'AK47', ammo: 500 },
-                        [WeaponTypes.THROWABLE]: { key: 'GRENADE', ammo: 50 }
+                        [WeaponTypes.PISTOL]: { key: 'GLOCK', ammo: 250 },
+                        [WeaponTypes.RIFLE]: { key: 'AK47', ammo: 400 },
+                        [WeaponTypes.THROWABLE]: { key: 'GRENADE', ammo: 30 }
                     },
                     selectedSlot: WeaponTypes.MELEE,
                     vehicleId: null, radius: 22, state: 'idle', rollAngle: 0, rollTimer: 0,
@@ -134,19 +127,15 @@
             });
 
             useEffect(() => {
-                // Force Clear Any Potential Stale State
-                console.log("VER.0.0.4 Mounting - Forcing Cache Bust");
-                localStorage.clear(); sessionStorage.clear();
-
                 const eng = engine.current;
                 eng.vehicles = []; eng.peds = []; eng.particles = [];
                 const vehicleTypes = [
-                    { name: 'Sedan', color: '#335599', radius: 60, speed: 5.0 },
-                    { name: 'SUV', color: '#993333', radius: 65, speed: 4.2 },
-                    { name: 'Sports', color: '#cc9911', radius: 58, speed: 7.2 }
+                    { name: 'Sedan', color: '#4466aa', radius: 60, speed: 4.8 },
+                    { name: 'SUV', color: '#aa4444', radius: 65, speed: 4.0 },
+                    { name: 'Sports', color: '#ccaa22', radius: 58, speed: 6.8 }
                 ];
 
-                for (let i = 0; i < 70; i++) {
+                for (let i = 0; i < 65; i++) {
                     const roadX = Math.floor(Math.random() * 6) * 6;
                     const roadY = Math.floor(Math.random() * CITY_SIZE);
                     const lane = Math.random() > 0.5 ? 1 : -1;
@@ -159,7 +148,7 @@
                         burnTimer: 0, blockedTimer: 0, reverseTimer: 0
                     });
                 }
-                for (let i = 0; i < 120; i++) {
+                for (let i = 0; i < 110; i++) {
                     eng.peds.push({ 
                         id: `p-${i}`, pos: { x: Math.random() * CITY_SIZE * TILE_SIZE, y: Math.random() * CITY_SIZE * TILE_SIZE }, 
                         angle: Math.random() * Math.PI * 2, health: 100, radius: 20, walkTimer: Math.random() * 200,
@@ -197,7 +186,7 @@
                 const eng = engine.current; const p = eng.player;
                 if (p.vehicleId) {
                     const v = eng.vehicles.find(v => v.id === p.vehicleId);
-                    if (v) { p.vehicleId = null; v.driver = 'npc'; v.gear = 1; p.pos.x += Math.cos(v.angle + Math.PI/2) * 140; p.pos.y += Math.sin(v.angle + Math.PI/2) * 140; }
+                    if (v) { p.vehicleId = null; v.driver = 'npc'; v.gear = 1; p.pos.x += Math.cos(v.angle + Math.PI/2) * 135; p.pos.y += Math.sin(v.angle + Math.PI/2) * 135; }
                 } else {
                     const v = eng.vehicles.find(v => !v.isWreck && Math.hypot(v.pos.x - p.pos.x, v.pos.y - p.pos.y) < 150);
                     if (v) { p.vehicleId = v.id; v.driver = 'player'; v.speed = 0; v.gear = 1; }
@@ -205,9 +194,9 @@
             };
 
             const loop = (time) => {
-                const dt = Math.min(1.2, (time - engine.current.lastTime) / 16.67);
+                const dt = Math.min(1.5, (time - engine.current.lastTime) / 16.67);
                 engine.current.lastTime = time;
-                engine.current.gameTime = (engine.current.gameTime + (dt * 16.67 / 18000)) % 24;
+                engine.current.gameTime = (engine.current.gameTime + (dt * 16.67 / 15000)) % 24;
                 for (let i = 0; i < 4; i++) updatePhysics(dt / 4);
                 render();
                 requestAnimationFrame(loop);
@@ -216,8 +205,8 @@
             const spawnBlood = (pos, dir = null) => {
                 const eng = engine.current;
                 eng.particles.push({
-                    type: 'blood', pos: { ...pos }, life: 600, size: 22 + Math.random() * 35, angle: Math.random() * Math.PI * 2,
-                    vel: dir ? { x: dir.x * 3.5, y: dir.y * 3.5 } : { x: (Math.random()-0.5)*3, y: (Math.random()-0.5)*3 }
+                    type: 'blood', pos: { ...pos }, life: 600, size: 20 + Math.random() * 30, angle: Math.random() * Math.PI * 2,
+                    vel: dir ? { x: dir.x * 3, y: dir.y * 3 } : { x: (Math.random()-0.5)*2.5, y: (Math.random()-0.5)*2.5 }
                 });
             };
 
@@ -226,37 +215,37 @@
                 if (p.health <= 0) return;
                 
                 const isAiming = eng.mouse.right && !p.vehicleId;
-                p.aimExtend += (isAiming ? 1 - p.aimExtend : -p.aimExtend) * 0.1 * dt;
+                p.aimExtend += (isAiming ? 1 - p.aimExtend : -p.aimExtend) * 0.08 * dt;
                 
                 eng.vehicles.forEach(v => {
                     if (v.isWreck) { if (v.burnTimer > 0) v.burnTimer -= dt; return; }
                     if (v.driver === 'player') {
-                        const gearT = [0, 1.5, 1.15, 0.85, 0.65]; 
-                        const gearM = [0, 8.5, 15.5, 23, 32];
+                        const gearT = [0, 1.45, 1.1, 0.8, 0.6]; 
+                        const gearM = [0, 8.0, 14.5, 21, 30];
                         if (p.transmission === 'auto') {
                             const absSpeed = Math.abs(v.speed);
-                            if (absSpeed > 23) v.gear = 4; else if (absSpeed > 15) v.gear = 3; else if (absSpeed > 8) v.gear = 2; else v.gear = 1;
+                            if (absSpeed > 21) v.gear = 4; else if (absSpeed > 14) v.gear = 3; else if (absSpeed > 7) v.gear = 2; else v.gear = 1;
                         }
-                        if (eng.keys['KeyS'] && eng.keys['KeyW']) v.speed *= Math.pow(0.68, dt);
-                        else if (eng.keys['KeyW']) v.speed = Math.min(gearM[v.gear], v.speed + 0.55 * gearT[v.gear] * dt);
-                        else if (eng.keys['KeyS']) v.speed = Math.max(-8.0, v.speed - 0.9 * dt);
-                        const turnFac = Math.min(1, Math.abs(v.speed) / 4.2);
-                        if (eng.keys['KeyA']) v.angle -= 0.1 * turnFac * dt;
-                        if (eng.keys['KeyD']) v.angle += 0.1 * turnFac * dt;
+                        if (eng.keys['KeyS'] && eng.keys['KeyW']) v.speed *= Math.pow(0.72, dt);
+                        else if (eng.keys['KeyW']) v.speed = Math.min(gearM[v.gear], v.speed + 0.5 * gearT[v.gear] * dt);
+                        else if (eng.keys['KeyS']) v.speed = Math.max(-7.0, v.speed - 0.8 * dt);
+                        const turnFac = Math.min(1, Math.abs(v.speed) / 4.5);
+                        if (eng.keys['KeyA']) v.angle -= 0.09 * turnFac * dt;
+                        if (eng.keys['KeyD']) v.angle += 0.09 * turnFac * dt;
                         v.speed *= Math.pow(DRAG, dt);
                         v.pos.x += Math.cos(v.angle) * v.speed * dt; v.pos.y += Math.sin(v.angle) * v.speed * dt;
                         p.pos = { ...v.pos }; p.angle = v.angle;
                     } else {
                         const entities = [...eng.peds.filter(n => !n.isDead), p];
-                        let dangerPed = entities.find(e => Math.hypot(e.pos.x - v.pos.x, e.pos.y - v.pos.y) < 220);
+                        let dangerPed = entities.find(e => Math.hypot(e.pos.x - v.pos.x, e.pos.y - v.pos.y) < 200);
                         let isBlocked = false;
-                        const frontX = v.pos.x + Math.cos(v.angle) * 135; const frontY = v.pos.y + Math.sin(v.angle) * 135;
+                        const frontX = v.pos.x + Math.cos(v.angle) * 130; const frontY = v.pos.y + Math.sin(v.angle) * 130;
                         if (eng.map[Math.floor(frontY/TILE_SIZE)]?.[Math.floor(frontX/TILE_SIZE)] === 3) isBlocked = true;
-                        if (v.reverseTimer > 0) { v.reverseTimer -= dt; v.speed = -3.5; v.angle += 0.03 * dt; }
+                        if (v.reverseTimer > 0) { v.reverseTimer -= dt; v.speed = -3.0; v.angle += 0.025 * dt; }
                         else {
-                            if (dangerPed || isBlocked) { v.speed *= Math.pow(0.72, dt); if (Math.abs(v.speed) < 0.28) v.blockedTimer += dt; }
-                            else { v.speed = Math.min(v.speed + 0.15 * dt, v.maxSpeed); v.blockedTimer = 0; }
-                            if (v.blockedTimer > 150) { v.reverseTimer = 80; v.blockedTimer = 0; }
+                            if (dangerPed || isBlocked) { v.speed *= Math.pow(0.75, dt); if (Math.abs(v.speed) < 0.25) v.blockedTimer += dt; }
+                            else { v.speed = Math.min(v.speed + 0.12 * dt, v.maxSpeed); v.blockedTimer = 0; }
+                            if (v.blockedTimer > 120) { v.reverseTimer = 70; v.blockedTimer = 0; }
                         }
                         v.pos.x += Math.cos(v.angle) * v.speed * dt; v.pos.y += Math.sin(v.angle) * v.speed * dt;
                     }
@@ -279,7 +268,7 @@
                             if (!isAiming) p.angle = inputAng;
                             if (speed > PLAYER_WALK_SPEED) p.stamina = Math.max(0, p.stamina - STAMINA_RUN_COST * dt);
                         } else p.stamina = Math.min(100, p.stamina + STAMINA_REGEN * dt);
-                        if (eng.keys['Space'] && p.stamina > 35) { p.state = 'rolling'; p.rollTimer = ROLL_DURATION; p.rollAngle = 0; p.stamina -= 35; playSfx(140, 'sine', 0.2, 0.15, 70); }
+                        if (eng.keys['Space'] && p.stamina > 35) { p.state = 'rolling'; p.rollTimer = ROLL_DURATION; p.rollAngle = 0; p.stamina -= 35; playSfx(120, 'sine', 0.2, 0.12, 60); }
                         if (p.selectedSlot === WeaponTypes.THROWABLE) {
                             if (eng.mouse.right) { 
                                 p.throwCharge = Math.min(MAX_THROW_DIST, p.throwCharge + (THROW_CHARGE_RATE * dt)); 
@@ -296,37 +285,45 @@
                 eng.projectiles = eng.projectiles.filter(pr => {
                     const prevX = pr.pos.x, prevY = pr.pos.y;
                     pr.pos.x += pr.vel.x * dt; pr.pos.y += pr.vel.y * dt; pr.life -= dt;
+                    
+                    // Projectile Wall Collision
                     const tx = Math.floor(pr.pos.x / TILE_SIZE), ty = Math.floor(pr.pos.y / TILE_SIZE);
                     if (eng.map[ty]?.[tx] === 3) {
-                        if (pr.isBomb) { pr.vel.x *= -0.6; pr.vel.y *= -0.6; pr.pos.x = prevX; pr.pos.y = prevY; } 
+                        if (pr.isBomb) { pr.vel.x *= -0.5; pr.vel.y *= -0.5; pr.pos.x = prevX; pr.pos.y = prevY; } 
                         else { pr.life = 0; return false; }
                     }
+
                     let hit = false;
                     [...eng.peds, p, ...eng.vehicles].forEach(target => {
                         if (target.id === pr.owner || target.health <= 0 || target.isWreck || target.isDead) return;
                         if (Math.hypot(target.pos.x - pr.pos.x, target.pos.y - pr.pos.y) < target.radius + pr.radius) {
                             target.health -= pr.damage; if (!pr.isBomb) hit = true; 
-                            if (target.knockback) { target.knockback.x += pr.vel.x * 0.45; target.knockback.y += pr.vel.y * 0.45; }
-                            playSfx(500, 'sawtooth', 0.05, 0.15, 250); 
-                            if (target.id.startsWith('p-')) { spawnBlood(target.pos, {x: pr.vel.x/30, y: pr.vel.y/30}); if (target.id !== 'player') { target.aiState = 'flee'; target.target = p; } }
-                            if (target.health <= 0) { if (target.crumpleOffsets) destroyVehicle(target); else { target.isDead = true; target.deathTimer = 600; playSfx(220, 'square', 0.2, 0.12); } }
+                            if (target.knockback) { target.knockback.x += pr.vel.x * 0.4; target.knockback.y += pr.vel.y * 0.4; }
+                            playSfx(450, 'sawtooth', 0.05, 0.12, 220); 
+                            if (target.id.startsWith('p-')) { spawnBlood(target.pos, {x: pr.vel.x/35, y: pr.vel.y/35}); if (target.id !== 'player') { target.aiState = 'flee'; target.target = p; } }
+                            if (target.health <= 0) { if (target.crumpleOffsets) destroyVehicle(target); else { target.isDead = true; target.deathTimer = 600; playSfx(200, 'square', 0.18, 0.1); } }
                         }
                     });
+                    
                     if (pr.life <= 0 && pr.isBomb) { 
-                        eng.explosions.push({ pos: { ...pr.pos }, life: 55, radius: pr.bombConfig.radius, damage: pr.bombConfig.damage }); 
-                        playSfx(45, 'sawtooth', 0.9, 0.5, 10); 
+                        eng.explosions.push({ pos: { ...pr.pos }, life: 50, radius: pr.bombConfig.radius, damage: pr.bombConfig.damage }); 
+                        playSfx(40, 'sawtooth', 0.8, 0.4, 15); 
                     }
                     return !hit && pr.life > 0;
                 });
 
                 eng.explosions = eng.explosions.filter(ex => {
                     ex.life -= dt;
-                    if (ex.life > 45) {
+                    if (ex.life > 42) {
                         [...eng.peds.filter(n=>!n.isDead), p, ...eng.vehicles.filter(v=>!v.isWreck)].forEach(target => {
                             const d = Math.hypot(target.pos.x - ex.pos.x, target.pos.y - ex.pos.y);
                             if (d < ex.radius) {
-                                const distMult = 1 - (d / ex.radius); target.health -= ex.damage * distMult * 0.35;
-                                if (target.knockback) { const nx = (target.pos.x - ex.pos.x)/d, ny = (target.pos.y - ex.pos.y)/d; target.knockback.x += nx * 35 * distMult; target.knockback.y += ny * 35 * distMult; }
+                                const distMult = 1 - (d / ex.radius);
+                                target.health -= ex.damage * distMult * 0.3;
+                                if (target.knockback) {
+                                    const nx = (target.pos.x - ex.pos.x)/d, ny = (target.pos.y - ex.pos.y)/d;
+                                    target.knockback.x += nx * 30 * distMult; target.knockback.y += ny * 30 * distMult;
+                                }
                                 if (target.health <= 0) { if (target.crumpleOffsets) destroyVehicle(target); else { target.isDead = true; target.deathTimer = 600; } }
                             }
                         });
@@ -336,9 +333,18 @@
 
                 eng.peds.forEach(npc => {
                     if (npc.isDead) { npc.deathTimer -= dt; return; }
-                    if (npc.knockback.x !== 0 || npc.knockback.y !== 0) { npc.pos.x += npc.knockback.x * dt; npc.pos.y += npc.knockback.y * dt; npc.knockback.x *= Math.pow(0.8, dt); npc.knockback.y *= Math.pow(0.8, dt); }
-                    if (npc.aiState === 'flee' && npc.target) { npc.angle = Math.atan2(npc.pos.y - npc.target.pos.y, npc.pos.x - npc.target.pos.x); npc.pos.x += Math.cos(npc.angle) * 4.0 * dt; npc.pos.y += Math.sin(npc.angle) * 4.0 * dt; } 
-                    else { npc.walkTimer -= dt; if (npc.walkTimer <= 0) { npc.angle = Math.random() * Math.PI * 2; npc.walkTimer = 140 + Math.random() * 240; } npc.pos.x += Math.cos(npc.angle) * 2.6 * dt; npc.pos.y += Math.sin(npc.angle) * 2.6 * dt; }
+                    if (npc.knockback.x !== 0 || npc.knockback.y !== 0) {
+                        npc.pos.x += npc.knockback.x * dt; npc.pos.y += npc.knockback.y * dt;
+                        npc.knockback.x *= Math.pow(0.82, dt); npc.knockback.y *= Math.pow(0.82, dt);
+                    }
+                    if (npc.aiState === 'flee' && npc.target) {
+                        npc.angle = Math.atan2(npc.pos.y - npc.target.pos.y, npc.pos.x - npc.target.pos.x);
+                        npc.pos.x += Math.cos(npc.angle) * 3.8 * dt; npc.pos.y += Math.sin(npc.angle) * 3.8 * dt;
+                    } else {
+                        npc.walkTimer -= dt;
+                        if (npc.walkTimer <= 0) { npc.angle = Math.random() * Math.PI * 2; npc.walkTimer = 130 + Math.random() * 220; }
+                        npc.pos.x += Math.cos(npc.angle) * 2.4 * dt; npc.pos.y += Math.sin(npc.angle) * 2.4 * dt;
+                    }
                     checkWall(npc);
                 });
 
@@ -353,24 +359,42 @@
                     for(let j=i+1; j<peds.length; j++) {
                         const a = peds[i], b = peds[j]; if (a.vehicleId || b.vehicleId) continue;
                         const dist = Math.hypot(b.pos.x - a.pos.x, b.pos.y - a.pos.y); const minDist = a.radius + b.radius;
-                        if (dist < minDist) { const overlap = minDist - dist; const nx = (b.pos.x - a.pos.x)/dist, ny = (b.pos.y - a.pos.y)/dist; a.pos.x -= nx * overlap * 0.5; a.pos.y -= ny * overlap * 0.5; b.pos.x += nx * overlap * 0.5; b.pos.y += ny * overlap * 0.5; }
+                        if (dist < minDist) {
+                            const overlap = minDist - dist; const nx = (b.pos.x - a.pos.x)/dist, ny = (b.pos.y - a.pos.y)/dist;
+                            a.pos.x -= nx * overlap * 0.5; a.pos.y -= ny * overlap * 0.5;
+                            b.pos.x += nx * overlap * 0.5; b.pos.y += ny * overlap * 0.5;
+                        }
                     }
                 }
                 const vehs = eng.vehicles.filter(v => !v.isWreck);
                 for(let i=0; i<vehs.length; i++) {
                     for(let j=i+1; j<vehs.length; j++) {
-                        const a = vehs[i], b = vehs[j]; const dist = Math.hypot(b.pos.x - a.pos.x, b.pos.y - a.pos.y); const minDist = a.radius + b.radius - 12;
-                        if (dist < minDist) { const overlap = minDist - dist; const nx = (b.pos.x - a.pos.x)/dist, ny = (b.pos.y - a.pos.y)/dist; a.pos.x -= nx * overlap * 0.5; a.pos.y -= ny * overlap * 0.5; b.pos.x += nx * overlap * 0.5; b.pos.y += ny * overlap * 0.5; const avgSpeed = (a.speed + b.speed) / 2; a.speed = avgSpeed * -0.6; b.speed = avgSpeed * -0.6; if (Math.abs(a.speed - b.speed) > 3.0) { a.health -= 15; b.health -= 15; if(a.health <= 0) destroyVehicle(a); if(b.health <= 0) destroyVehicle(b); } }
+                        const a = vehs[i], b = vehs[j];
+                        const dist = Math.hypot(b.pos.x - a.pos.x, b.pos.y - a.pos.y); const minDist = a.radius + b.radius - 15;
+                        if (dist < minDist) {
+                            const overlap = minDist - dist; const nx = (b.pos.x - a.pos.x)/dist, ny = (b.pos.y - a.pos.y)/dist;
+                            a.pos.x -= nx * overlap * 0.5; a.pos.y -= ny * overlap * 0.5;
+                            b.pos.x += nx * overlap * 0.5; b.pos.y += ny * overlap * 0.5;
+                            const avgSpeed = (a.speed + b.speed) / 2; a.speed = avgSpeed * -0.55; b.speed = avgSpeed * -0.55;
+                            if (Math.abs(a.speed - b.speed) > 3.5) { a.health -= 12; b.health -= 12; if(a.health <= 0) destroyVehicle(a); if(b.health <= 0) destroyVehicle(b); }
+                        }
                     }
                 }
                 vehs.forEach(v => {
                     peds.forEach(ent => {
                         if (ent.vehicleId === v.id) return;
-                        const d = Math.hypot(v.pos.x - ent.pos.x, v.pos.y - ent.pos.y); const minDist = v.radius + ent.radius - 8;
+                        const d = Math.hypot(v.pos.x - ent.pos.x, v.pos.y - ent.pos.y); const minDist = v.radius + ent.radius - 10;
                         if (d < minDist) {
                             const absSpeed = Math.abs(v.speed);
-                            if (absSpeed > 1.0) { const damageMult = absSpeed * absSpeed * 3.2; ent.health -= damageMult * dt; if (absSpeed > 2.2) spawnBlood(ent.pos, {x: (ent.pos.x - v.pos.x)/d, y: (ent.pos.y - v.pos.y)/d}); if (ent.health <= 0 && ent.id !== 'player') { ent.isDead = true; ent.deathTimer = 600; playSfx(160, 'square', 0.25, 0.25, 40); } }
-                            const nx = (ent.pos.x - v.pos.x)/d, ny = (ent.pos.y - v.pos.y)/d; const pushForce = Math.max(16, absSpeed * 8.5); ent.pos.x += nx * pushForce; ent.pos.y += ny * pushForce; if (ent.knockback) { ent.knockback.x += nx * absSpeed * 4.0; ent.knockback.y += ny * absSpeed * 4.0; } v.speed *= 0.88;
+                            if (absSpeed > 1.0) {
+                                const damageMult = absSpeed * absSpeed * 2.8; ent.health -= damageMult * dt;
+                                if (absSpeed > 2.5) spawnBlood(ent.pos, {x: (ent.pos.x - v.pos.x)/d, y: (ent.pos.y - v.pos.y)/d});
+                                if (ent.health <= 0 && ent.id !== 'player') { ent.isDead = true; ent.deathTimer = 600; playSfx(150, 'square', 0.25, 0.2, 50); }
+                            }
+                            const nx = (ent.pos.x - v.pos.x)/d, ny = (ent.pos.y - v.pos.y)/d;
+                            const pushForce = Math.max(14, absSpeed * 7.5); ent.pos.x += nx * pushForce; ent.pos.y += ny * pushForce;
+                            if (ent.knockback) { ent.knockback.x += nx * absSpeed * 3.5; ent.knockback.y += ny * absSpeed * 3.5; }
+                            v.speed *= 0.9;
                         }
                     });
                 });
@@ -381,23 +405,31 @@
                 if (!config || Date.now() - p.lastShot < config.cooldown * 16.6) return;
                 p.lastShot = Date.now();
                 if (p.selectedSlot === WeaponTypes.MELEE) {
-                    p.swingTimer = 15; p.swingSide *= -1; playSfx(160, 'square', 0.1, 0.2, 90);
-                    eng.peds.forEach(npc => { if (npc.isDead) return; const d = Math.hypot(npc.pos.x - p.pos.x, npc.pos.y - p.pos.y); const a = Math.atan2(npc.pos.y - p.pos.y, npc.pos.x - p.pos.x); if (d < config.range && Math.abs(((a - p.angle + Math.PI*3) % (Math.PI*2)) - Math.PI) < 1.0) { npc.health -= config.damage; npc.aiState = 'flee'; npc.target = p; npc.knockback.x = Math.cos(p.angle) * 20; npc.knockback.y = Math.sin(p.angle) * 20; playSfx(380, 'sawtooth', 0.08, 0.12, 110); } });
+                    p.swingTimer = 15; p.swingSide *= -1; playSfx(150, 'square', 0.1, 0.15, 80);
+                    eng.peds.forEach(npc => {
+                        if (npc.isDead) return;
+                        const d = Math.hypot(npc.pos.x - p.pos.x, npc.pos.y - p.pos.y); const a = Math.atan2(npc.pos.y - p.pos.y, npc.pos.x - p.pos.x);
+                        if (d < config.range && Math.abs(((a - p.angle + Math.PI*3) % (Math.PI*2)) - Math.PI) < 1.0) {
+                            npc.health -= config.damage; npc.aiState = 'flee'; npc.target = p;
+                            npc.knockback.x = Math.cos(p.angle) * 18; npc.knockback.y = Math.sin(p.angle) * 18;
+                            playSfx(350, 'sawtooth', 0.08, 0.1, 100);
+                        }
+                    });
                 } else if (p.selectedSlot !== WeaponTypes.THROWABLE) {
-                    if (slot.ammo <= 0) return; slot.ammo--; playSfx(850, 'sawtooth', 0.05, 0.22, 600);
-                    eng.projectiles.push({ pos: { x: p.pos.x + Math.cos(p.angle)*42, y: p.pos.y + Math.sin(p.angle)*42 }, vel: { x: Math.cos(p.angle)*52, y: Math.sin(p.angle)*52 }, owner: 'player', life: 42, radius: 5, damage: config.damage, color: config.color });
+                    if (slot.ammo <= 0) return; slot.ammo--; playSfx(800, 'sawtooth', 0.05, 0.2, 550);
+                    eng.projectiles.push({ pos: { x: p.pos.x + Math.cos(p.angle)*40, y: p.pos.y + Math.sin(p.angle)*40 }, vel: { x: Math.cos(p.angle)*50, y: Math.sin(p.angle)*50 }, owner: 'player', life: 40, radius: 5, damage: config.damage, color: config.color });
                 }
             };
 
             const throwObject = (p) => {
                 const eng = engine.current; const slot = p.inventory[WeaponTypes.THROWABLE]; const config = WEAPON_DATA[WeaponTypes.THROWABLE][slot.key];
                 if (slot.ammo <= 0) return; slot.ammo--;
-                const travelDist = p.throwCharge * TILE_SIZE; const speed = 15;
+                const travelDist = p.throwCharge * TILE_SIZE; const speed = 14;
                 eng.projectiles.push({ pos: { x: p.pos.x, y: p.pos.y }, vel: { x: Math.cos(p.angle) * speed, y: Math.sin(p.angle) * speed }, owner: 'player', life: travelDist / speed, radius: 10, damage: 0, isBomb: true, bombConfig: config, color: config.color });
-                playSfx(400, 'sine', 0.15, 0.2, 150);
+                playSfx(350, 'sine', 0.12, 0.15, 120);
             };
 
-            const destroyVehicle = (v) => { v.isWreck = true; v.speed = 0; v.burnTimer = 280; playSfx(45, 'sawtooth', 1.2, 0.5, 5); };
+            const destroyVehicle = (v) => { v.isWreck = true; v.speed = 0; v.burnTimer = 250; playSfx(50, 'sawtooth', 1.0, 0.45, 10); };
             
             const checkWall = (ent) => {
                 const { map } = engine.current; const tx = Math.floor(ent.pos.x / TILE_SIZE), ty = Math.floor(ent.pos.y / TILE_SIZE);
@@ -406,7 +438,13 @@
                         if (map[y]?.[x] === 3) {
                             const bX = x * TILE_SIZE, bY = y * TILE_SIZE; const cX = Math.max(bX, Math.min(ent.pos.x, bX + TILE_SIZE)), cY = Math.max(bY, Math.min(ent.pos.y, bY + TILE_SIZE));
                             const dx = ent.pos.x - cX, dy = ent.pos.y - cY; const d = Math.hypot(dx, dy);
-                            if (d < ent.radius && d > 0) { ent.pos.x += (dx/d) * (ent.radius - d); ent.pos.y += (dy/d) * (ent.radius - d); if (ent.speed) { if (Math.abs(ent.speed) > 4.2 && ent.crumpleOffsets) { ent.health -= Math.abs(ent.speed)*4.5; ent.crumpleOffsets = ent.crumpleOffsets.map(o => ({ x: o.x + (Math.random()-0.5)*20, y: o.y + (Math.random()-0.5)*20 })); if (ent.health<=0) destroyVehicle(ent); } ent.speed *= -0.52; } }
+                            if (d < ent.radius && d > 0) {
+                                ent.pos.x += (dx/d) * (ent.radius - d); ent.pos.y += (dy/d) * (ent.radius - d);
+                                if (ent.speed) { 
+                                    if (Math.abs(ent.speed) > 4.5 && ent.crumpleOffsets) { ent.health -= Math.abs(ent.speed)*4.0; ent.crumpleOffsets = ent.crumpleOffsets.map(o => ({ x: o.x + (Math.random()-0.5)*18, y: o.y + (Math.random()-0.5)*18 })); if (ent.health<=0) destroyVehicle(ent); } 
+                                    ent.speed *= -0.48; 
+                                }
+                            }
                         }
                     }
                 }
@@ -419,16 +457,16 @@
                 
                 const v = eng.vehicles.find(v => v.id === p.vehicleId); const weaponSlot = p.inventory[p.selectedSlot]; const wConfig = WEAPON_DATA[p.selectedSlot][weaponSlot.key];
                 const isNight = eng.gameTime < 6 || eng.gameTime > 19;
-                const baseZoom = v ? (0.42 - Math.abs(v.speed)*0.01) : 0.88; const zoomT = (baseZoom - (p.aimExtend * wConfig.zoomBonus)) * (isNight ? 0.7 : 1);
+                const baseZoom = v ? (0.42 - Math.abs(v.speed)*0.01) : 0.88; const zoomT = (baseZoom - (p.aimExtend * wConfig.zoomBonus)) * (isNight ? 0.72 : 1);
                 eng.camera.currentZoom += (zoomT - eng.camera.currentZoom) * 0.08;
-                const ambientBrightness = isNight ? 0.02 : Math.sin((eng.gameTime - 6) * Math.PI / 12) * 0.5 + 0.38;
+                const ambientBrightness = isNight ? 0.02 : Math.sin((eng.gameTime - 6) * Math.PI / 12) * 0.5 + 0.35;
                 const sunAngle = (eng.gameTime - 12) * Math.PI / 12;
-                const shadowOffX = Math.cos(sunAngle) * 15; const shadowOffY = Math.sin(sunAngle) * 15;
+                const shadowOffX = Math.cos(sunAngle) * 14; const shadowOffY = Math.sin(sunAngle) * 14;
                 
-                ctx.fillStyle = isNight ? '#010106' : '#080816'; ctx.fillRect(0,0, canvas.width, canvas.height);
+                ctx.fillStyle = isNight ? '#020208' : '#0a0a1a'; ctx.fillRect(0,0, canvas.width, canvas.height);
                 ctx.save(); ctx.translate(canvas.width/2, canvas.height/2); ctx.scale(eng.camera.currentZoom, eng.camera.currentZoom); ctx.translate(-p.pos.x, -p.pos.y);
 
-                if (p.health <= 0) ctx.filter = 'grayscale(100%) brightness(50%)';
+                if (p.health <= 0) ctx.filter = 'grayscale(100%)';
 
                 for (let y = 0; y < CITY_SIZE; y++) {
                     for (let x = 0; x < CITY_SIZE; x++) {
@@ -436,7 +474,7 @@
                         if (t === 1) { ctx.fillStyle = COLORS.ROAD; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE); }
                         else if (t === 2) { ctx.fillStyle = COLORS.SIDEWALK; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE); }
                         else if (t === 3) { 
-                            ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(px + shadowOffX*2.3, py + shadowOffY*2.3, TILE_SIZE, TILE_SIZE); 
+                            ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(px + shadowOffX*2.2, py + shadowOffY*2.2, TILE_SIZE, TILE_SIZE); 
                             ctx.fillStyle = COLORS.BUILDING; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE); 
                             ctx.fillStyle = COLORS.BUILDING_TOP; ctx.fillRect(px+32, py+32, TILE_SIZE-64, TILE_SIZE-64); 
                         }
@@ -446,36 +484,36 @@
                 const drawShadow = (pos, radius, scaleY = 0.5) => {
                     ctx.save(); ctx.translate(pos.x + shadowOffX, pos.y + shadowOffY); ctx.scale(1, scaleY); ctx.fillStyle = COLORS.SHADOW; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.fill(); ctx.restore();
                 };
-                eng.vehicles.forEach(veh => drawShadow(veh.pos, veh.radius * 1.18, 0.6));
-                eng.peds.forEach(ped => { if(!ped.isDead) drawShadow(ped.pos, ped.radius * 1.28); });
-                if(!p.vehicleId) drawShadow(p.pos, p.radius * 1.28);
+                eng.vehicles.forEach(veh => drawShadow(veh.pos, veh.radius * 1.15, 0.6));
+                eng.peds.forEach(ped => { if(!ped.isDead) drawShadow(ped.pos, ped.radius * 1.25); });
+                if(!p.vehicleId) drawShadow(p.pos, p.radius * 1.25);
 
-                eng.particles.forEach(pa => { if (pa.type === 'blood') { ctx.fillStyle = COLORS.BLOOD; ctx.globalAlpha = Math.min(1, pa.life/220); ctx.beginPath(); ctx.arc(pa.pos.x, pa.pos.y, pa.size, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1; } });
-                eng.peds.forEach(ped => { if (ped.isDead) { ctx.save(); ctx.translate(ped.pos.x, ped.pos.y); ctx.globalAlpha = Math.min(1, ped.deathTimer/280); ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(0,0, ped.radius, 0, Math.PI*2); ctx.fill(); ctx.restore(); } });
+                eng.particles.forEach(pa => { if (pa.type === 'blood') { ctx.fillStyle = COLORS.BLOOD; ctx.globalAlpha = Math.min(1, pa.life/200); ctx.beginPath(); ctx.arc(pa.pos.x, pa.pos.y, pa.size, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1; } });
+                eng.peds.forEach(ped => { if (ped.isDead) { ctx.save(); ctx.translate(ped.pos.x, ped.pos.y); ctx.globalAlpha = Math.min(1, ped.deathTimer/250); ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(0,0, ped.radius, 0, Math.PI*2); ctx.fill(); ctx.restore(); } });
 
                 eng.vehicles.forEach(veh => {
                     ctx.save(); ctx.translate(veh.pos.x, veh.pos.y); ctx.rotate(veh.angle);
                     if (!veh.isWreck) {
                         const isRev = (veh.driver === 'player' && veh.speed < 0) || (veh.driver === 'npc' && veh.speed < 0);
                         const isBrake = (veh.driver === 'player' && eng.keys['KeyS'] && veh.speed > 0.05);
-                        const headGrad = ctx.createRadialGradient(45, 0, 15, isNight ? 500 : 300, 0, isNight ? 380 : 220);
-                        headGrad.addColorStop(0, isNight ? 'rgba(255,255,180,0.7)' : 'rgba(255,255,180,0.3)'); headGrad.addColorStop(1, 'transparent');
-                        ctx.fillStyle = headGrad; ctx.beginPath(); ctx.moveTo(40, -35); ctx.lineTo(isNight ? 550 : 320, -140); ctx.lineTo(isNight ? 550 : 320, 140); ctx.lineTo(40, 35); ctx.fill();
+                        const headGrad = ctx.createRadialGradient(45, 0, 15, isNight ? 480 : 280, 0, isNight ? 350 : 200);
+                        headGrad.addColorStop(0, isNight ? 'rgba(255,255,200,0.65)' : 'rgba(255,255,200,0.25)'); headGrad.addColorStop(1, 'transparent');
+                        ctx.fillStyle = headGrad; ctx.beginPath(); ctx.moveTo(40, -35); ctx.lineTo(isNight ? 520 : 300, -130); ctx.lineTo(isNight ? 520 : 300, 130); ctx.lineTo(40, 35); ctx.fill();
                         if (isRev || isBrake || isNight) {
-                            const intensity = isBrake ? 0.99 : (isRev ? 0.75 : 0.45);
-                            const tailGrad = ctx.createRadialGradient(-45, 0, 10, -160, 0, 130);
+                            const intensity = isBrake ? 0.98 : (isRev ? 0.7 : 0.4);
+                            const tailGrad = ctx.createRadialGradient(-45, 0, 10, -150, 0, 120);
                             tailGrad.addColorStop(0, isRev ? `rgba(255,255,255,${intensity})` : `rgba(255,0,0,${intensity})`);
                             tailGrad.addColorStop(1, 'transparent');
-                            ctx.fillStyle = tailGrad; ctx.beginPath(); ctx.moveTo(-40, -32); ctx.lineTo(-200, -105); ctx.lineTo(-200, 105); ctx.lineTo(-40, 32); ctx.fill();
-                            ctx.fillStyle = isRev ? '#fff' : (isBrake ? '#ff0000' : '#bb0000');
-                            ctx.shadowBlur = isBrake ? 30 : 0; ctx.shadowColor = '#ff0000';
-                            ctx.fillRect(-58, -28, 7, 16); ctx.fillRect(-58, 12, 7, 16); ctx.shadowBlur = 0;
+                            ctx.fillStyle = tailGrad; ctx.beginPath(); ctx.moveTo(-40, -32); ctx.lineTo(-190, -95); ctx.lineTo(-190, 95); ctx.lineTo(-40, 32); ctx.fill();
+                            ctx.fillStyle = isRev ? '#fff' : (isBrake ? '#ff0000' : '#aa0000');
+                            ctx.shadowBlur = isBrake ? 25 : 0; ctx.shadowColor = '#ff0000';
+                            ctx.fillRect(-58, -28, 6, 14); ctx.fillRect(-58, 14, 6, 14); ctx.shadowBlur = 0;
                         }
                     }
                     ctx.fillStyle = veh.isWreck ? COLORS.WRECK : veh.color; const w = 58, h = 33;
                     ctx.beginPath(); ctx.moveTo(-w+veh.crumpleOffsets[0].x, -h+veh.crumpleOffsets[0].y); ctx.lineTo(w+veh.crumpleOffsets[1].x, -h+veh.crumpleOffsets[1].y); ctx.lineTo(w+veh.crumpleOffsets[2].x, h+veh.crumpleOffsets[2].y); ctx.lineTo(-w+veh.crumpleOffsets[3].x, h+veh.crumpleOffsets[3].y); ctx.closePath(); ctx.fill();
-                    if (!veh.isWreck) { ctx.fillStyle = 'rgba(255,255,255,0.22)'; ctx.fillRect(-35, -28, 70, 56); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(25, -24, 15, 48); ctx.fillRect(-45, -24, 10, 48); }
-                    if (veh.burnTimer > 0) { ctx.fillStyle = `rgba(255, ${130 + Math.random()*125}, 0, 0.95)`; ctx.beginPath(); ctx.arc((Math.random()-0.5)*38, (Math.random()-0.5)*38, 48*Math.random(), 0, Math.PI*2); ctx.fill(); }
+                    if (!veh.isWreck) { ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.fillRect(-35, -28, 70, 56); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(25, -24, 15, 48); ctx.fillRect(-45, -24, 10, 48); }
+                    if (veh.burnTimer > 0) { ctx.fillStyle = `rgba(255, ${120 + Math.random()*135}, 0, 0.9)`; ctx.beginPath(); ctx.arc((Math.random()-0.5)*35, (Math.random()-0.5)*35, 45*Math.random(), 0, Math.PI*2); ctx.fill(); }
                     ctx.restore();
                 });
 
@@ -485,36 +523,36 @@
                     if (isP && c.state === 'rolling') ctx.rotate(c.angle + (c.rollAngle * Math.PI * 2)); else ctx.rotate(c.angle);
                     ctx.fillStyle = isP ? COLORS.PLAYER : COLORS.PED; ctx.beginPath(); ctx.arc(0,0, c.radius, 0, Math.PI*2); ctx.fill();
                     ctx.fillStyle = 'black'; ctx.fillRect(16, -4, 10, 8); 
-                    if (isP && c.swingTimer > 0) { ctx.fillStyle = COLORS.PLAYER; const ext = Math.sin(c.swingTimer * 0.28) * 38; ctx.beginPath(); ctx.arc(28 + ext, 18 * c.swingSide, 12, 0, Math.PI*2); ctx.fill(); }
+                    if (isP && c.swingTimer > 0) { ctx.fillStyle = COLORS.PLAYER; const ext = Math.sin(c.swingTimer * 0.25) * 35; ctx.beginPath(); ctx.arc(26 + ext, 16 * c.swingSide, 11, 0, Math.PI*2); ctx.fill(); }
                     ctx.restore();
                 };
                 eng.peds.forEach(ped => { if(!ped.isDead) drawChar(ped, false); }); drawChar(p, true);
                 
-                eng.projectiles.forEach(pr => { ctx.fillStyle = pr.color || '#fff'; ctx.shadowBlur = 25; ctx.shadowColor = pr.color || '#fff'; ctx.beginPath(); ctx.arc(pr.pos.x, pr.pos.y, pr.radius, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0; });
-                eng.explosions.forEach(ex => { ctx.fillStyle = `rgba(255, 160, 0, ${ex.life/55})`; ctx.beginPath(); ctx.arc(ex.pos.x, ex.pos.y, ex.radius * (1 - ex.life/55), 0, Math.PI*2); ctx.fill(); });
+                eng.projectiles.forEach(pr => { ctx.fillStyle = pr.color || '#fff'; ctx.shadowBlur = 20; ctx.shadowColor = pr.color || '#fff'; ctx.beginPath(); ctx.arc(pr.pos.x, pr.pos.y, pr.radius, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0; });
+                eng.explosions.forEach(ex => { ctx.fillStyle = `rgba(255, 150, 0, ${ex.life/50})`; ctx.beginPath(); ctx.arc(ex.pos.x, ex.pos.y, ex.radius * (1 - ex.life/50), 0, Math.PI*2); ctx.fill(); });
                 ctx.restore();
 
-                const vision = (1100 + (p.aimExtend * 900) + (p.vehicleId ? 500 : 0)) / eng.camera.currentZoom;
-                const fogIntensity = isNight ? 0.998 : 0.95 - (ambientBrightness * 0.07);
-                const fogGrad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, vision*0.35, canvas.width/2, canvas.height/2, vision*2.0);
-                fogGrad.addColorStop(0, 'transparent'); fogGrad.addColorStop(0.5, `rgba(0,0,0,${fogIntensity * 0.55})`); fogGrad.addColorStop(1, `rgba(0,0,0,${fogIntensity})`);
+                const vision = (1050 + (p.aimExtend * 850) + (p.vehicleId ? 480 : 0)) / eng.camera.currentZoom;
+                const fogIntensity = isNight ? 0.998 : 0.95 - (ambientBrightness * 0.06);
+                const fogGrad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, vision*0.3, canvas.width/2, canvas.height/2, vision*1.95);
+                fogGrad.addColorStop(0, 'transparent'); fogGrad.addColorStop(0.5, `rgba(0,0,0,${fogIntensity * 0.5})`); fogGrad.addColorStop(1, `rgba(0,0,0,${fogIntensity})`);
                 ctx.fillStyle = fogGrad; ctx.fillRect(0,0, canvas.width, canvas.height);
 
                 const isAimingFirearm = p.aimExtend > 0.1 && (p.selectedSlot === WeaponTypes.PISTOL || p.selectedSlot === WeaponTypes.RIFLE);
                 if (isAimingFirearm) {
-                    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(eng.mouse.x, eng.mouse.y, 14, 0, Math.PI*2); ctx.moveTo(eng.mouse.x - 20, eng.mouse.y); ctx.lineTo(eng.mouse.x + 20, eng.mouse.y); ctx.moveTo(eng.mouse.x, eng.mouse.y - 20); ctx.lineTo(eng.mouse.x, eng.mouse.y + 20); ctx.stroke();
+                    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(eng.mouse.x, eng.mouse.y, 12, 0, Math.PI*2); ctx.moveTo(eng.mouse.x - 18, eng.mouse.y); ctx.lineTo(eng.mouse.x + 18, eng.mouse.y); ctx.moveTo(eng.mouse.x, eng.mouse.y - 18); ctx.lineTo(eng.mouse.x, eng.mouse.y + 18); ctx.stroke();
                 } else if (p.selectedSlot === WeaponTypes.THROWABLE && eng.mouse.right) {
-                    ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 3.5; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(eng.mouse.x, eng.mouse.y, 16 + (p.throwCharge * 11), 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+                    ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 3; ctx.setLineDash([5, 5]); ctx.beginPath(); ctx.arc(eng.mouse.x, eng.mouse.y, 15 + (p.throwCharge * 10), 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
                 } else {
-                    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(eng.mouse.x, eng.mouse.y, 5, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(eng.mouse.x, eng.mouse.y, 4, 0, Math.PI*2); ctx.fill();
                 }
 
                 const mapS = 220; const mapX = canvas.width - mapS - 30; const mapY = canvas.height - mapS - 30;
-                ctx.fillStyle = 'rgba(0,0,0,0.97)'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.fillRect(mapX, mapY, mapS, mapS); ctx.strokeRect(mapX, mapY, mapS, mapS);
-                ctx.save(); ctx.beginPath(); ctx.rect(mapX, mapY, mapS, mapS); ctx.clip(); ctx.translate(mapX + mapS/2, mapY + mapS/2); ctx.scale(0.017, 0.017); ctx.translate(-p.pos.x, -p.pos.y);
-                for (let y = 0; y < CITY_SIZE; y++) { for (let x = 0; x < CITY_SIZE; x++) { if (eng.map[y][x] === 3) { ctx.fillStyle = '#101025'; ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE); } } }
-                eng.peds.forEach(ped => { if(!ped.isDead && Math.hypot(ped.pos.x-p.pos.x, ped.pos.y-p.pos.y) < 1600) { ctx.fillStyle = '#ff0055'; ctx.beginPath(); ctx.arc(ped.pos.x, ped.pos.y, 140, 0, Math.PI*2); ctx.fill(); } });
-                ctx.fillStyle = COLORS.PLAYER; ctx.beginPath(); ctx.arc(p.pos.x, p.pos.y, 200, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = 'rgba(0,0,0,0.96)'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.fillRect(mapX, mapY, mapS, mapS); ctx.strokeRect(mapX, mapY, mapS, mapS);
+                ctx.save(); ctx.beginPath(); ctx.rect(mapX, mapY, mapS, mapS); ctx.clip(); ctx.translate(mapX + mapS/2, mapY + mapS/2); ctx.scale(0.018, 0.018); ctx.translate(-p.pos.x, -p.pos.y);
+                for (let y = 0; y < CITY_SIZE; y++) { for (let x = 0; x < CITY_SIZE; x++) { if (eng.map[y][x] === 3) { ctx.fillStyle = '#111122'; ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE); } } }
+                eng.peds.forEach(ped => { if(!ped.isDead && Math.hypot(ped.pos.x-p.pos.x, ped.pos.y-p.pos.y) < 1600) { ctx.fillStyle = 'red'; ctx.beginPath(); ctx.arc(ped.pos.x, ped.pos.y, 130, 0, Math.PI*2); ctx.fill(); } });
+                ctx.fillStyle = '#0f0'; ctx.beginPath(); ctx.arc(p.pos.x, p.pos.y, 180, 0, Math.PI*2); ctx.fill();
                 ctx.restore();
             };
             return React.createElement('canvas', { ref: canvasRef });
@@ -522,67 +560,53 @@
 
         const App = () => {
             const [gameKey, setGameKey] = useState(0);
-            const [showSplash, setShowSplash] = useState(true);
             const [state, setState] = useState({ player: { health: 100, stamina: 100, inventory: {}, selectedSlot: WeaponTypes.MELEE, transmission: 'auto' }, vehicle: null, gameTime: 12 });
             const slots = [WeaponTypes.MELEE, WeaponTypes.PISTOL, WeaponTypes.RIFLE, WeaponTypes.THROWABLE];
-            
-            useEffect(() => {
-                const timer = setTimeout(() => setShowSplash(false), 1500);
-                return () => clearTimeout(timer);
-            }, [gameKey]);
-
             const formatTime = (t) => {
                 const h24 = Math.floor(t); const m = Math.floor((t % 1) * 60); const ampm = h24 >= 12 ? 'PM' : 'AM'; const h12 = h24 % 12 || 12;
                 return `${h12.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
             };
-            
             return React.createElement('div', { className: 'relative w-screen h-screen bg-black text-white overflow-hidden font-mono select-none' },
                 React.createElement(GameCanvas, { key: gameKey, gameKey, onUpdate: setState }),
-                
-                showSplash && React.createElement('div', { className: 'absolute inset-0 bg-black flex flex-col items-center justify-center z-[100] animate-fade-in' },
-                    React.createElement('h2', { className: 'text-6xl font-black italic text-fuchsia-500 mb-4 tracking-widest animate-pulse-fast' }, 'VER.0.0.4'),
-                    React.createElement('p', { className: 'text-white/50 text-sm' }, 'SYNCING CACHE & ENGINE...')
-                ),
-
-                React.createElement('div', { className: 'absolute bottom-2 right-2 text-[10px] opacity-40 ui-element flex flex-col items-end' }, 
-                    React.createElement('span', { className: 'text-fuchsia-400 font-bold' }, 'VER.0.0.4 - LIVE'),
-                    React.createElement('span', null, '[engine: v4-ccd]')
+                React.createElement('div', { className: 'absolute bottom-2 right-2 text-[10px] opacity-30 ui-element flex flex-col items-end' }, 
+                    React.createElement('span', null, 'VER.0.0.2'),
+                    React.createElement('span', null, '[release: alpha-2-restored]')
                 ),
                 React.createElement('div', { className: 'absolute top-6 left-6 flex flex-col gap-4 ui-element' },
-                    React.createElement('div', { className: 'bg-black/90 border-l-8 border-fuchsia-600 px-6 py-2 text-fuchsia-400 text-6xl font-black italic shadow-[0_0_20px_rgba(255,0,255,0.3)]' }, formatTime(state.gameTime)),
+                    React.createElement('div', { className: 'bg-black/90 border-l-8 border-yellow-500 px-6 py-2 text-yellow-400 text-6xl font-black italic shadow-lg' }, formatTime(state.gameTime)),
                     React.createElement('div', { className: 'w-80 space-y-2' },
-                        React.createElement('div', { className: 'h-7 bg-gray-950 border-2 border-white/10 p-1' }, React.createElement('div', { className: 'h-full bg-gradient-to-r from-red-600 to-red-400 shadow-[0_0_20px_red]', style: { width: `${state.player.health}%` } })),
-                        React.createElement('div', { className: 'h-3.5 bg-gray-950 border-2 border-white/10 p-0.5' }, React.createElement('div', { className: 'h-full bg-gradient-to-r from-fuchsia-600 to-fuchsia-400 shadow-[0_0_12px_fuchsia]', style: { width: `${state.player.stamina}%` } }))
+                        React.createElement('div', { className: 'h-7 bg-gray-950 border-2 border-white/20 p-1' }, React.createElement('div', { className: 'h-full bg-red-600 shadow-[0_0_20px_red]', style: { width: `${state.player.health}%` } })),
+                        React.createElement('div', { className: 'h-3.5 bg-gray-950 border-2 border-white/20 p-0.5' }, React.createElement('div', { className: 'h-full bg-blue-500 shadow-[0_0_12px_blue]', style: { width: `${state.player.stamina}%` } }))
                     )
                 ),
-                React.createElement('div', { className: 'absolute top-6 right-6 flex gap-3 p-4 bg-black/85 border-b-4 border-fuchsia-600 rounded-xl ui-element shadow-2xl' },
+                React.createElement('div', { className: 'absolute top-6 right-6 flex gap-3 p-4 bg-black/85 border-b-4 border-yellow-500 rounded-xl ui-element' },
                     slots.map((s, i) => {
                         const inv = state.player.inventory[s]; const active = state.player.selectedSlot === s;
-                        return React.createElement('div', { key: s, className: `w-24 h-24 border-2 transition-all flex flex-col items-center justify-center ${active ? 'border-fuchsia-400 bg-fuchsia-400/20 scale-110 shadow-[0_0_20px_rgba(255,0,255,0.4)]' : 'border-white/5 opacity-50'}` },
+                        return React.createElement('div', { key: s, className: `w-24 h-24 border-2 transition-all flex flex-col items-center justify-center ${active ? 'border-yellow-400 bg-yellow-400/25 scale-110 shadow-lg' : 'border-white/10 opacity-60'}` },
                             React.createElement('div', { className: 'text-[10px] opacity-40' }, i+1),
                             React.createElement('div', { className: 'text-[10px] font-bold text-center px-1' }, inv?.key || 'EMPTY'),
-                            React.createElement('div', { className: 'text-[13px] mt-1 text-fuchsia-500 font-bold' }, inv?.ammo ?? '')
+                            React.createElement('div', { className: 'text-[13px] mt-1 text-yellow-500 font-bold' }, inv?.ammo ?? '')
                         );
                     })
                 ),
                 state.vehicle && React.createElement('div', { className: 'absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 ui-element' },
                     React.createElement('div', { className: 'flex gap-4' },
-                        React.createElement('div', { className: 'bg-black/80 px-4 py-1 border-2 border-white/20 rounded-lg text-xs' }, `MODE: ${state.player.transmission.toUpperCase()}`),
-                        React.createElement('div', { className: 'bg-black/80 px-4 py-1 border-2 border-fuchsia-600 rounded-lg text-xs text-fuchsia-400 font-bold shadow-lg' }, `GEAR: ${state.vehicle.gear}`)
+                        React.createElement('div', { className: 'bg-black/80 px-4 py-1 border-2 border-white rounded-lg text-xs' }, `MODE: ${state.player.transmission.toUpperCase()}`),
+                        React.createElement('div', { className: 'bg-black/80 px-4 py-1 border-2 border-yellow-500 rounded-lg text-xs text-yellow-400 font-bold' }, `GEAR: ${state.vehicle.gear}`)
                     ),
-                    React.createElement('div', { className: 'bg-black/90 px-8 py-3 border-2 border-white/30 rounded-2xl text-4xl font-black italic flex items-baseline gap-2 shadow-2xl' },
-                        React.createElement('span', { className: 'text-white' }, Math.floor(Math.abs(state.vehicle.speed) * 34)),
-                        React.createElement('span', { className: 'text-xs text-fuchsia-500' }, 'KM/H')
+                    React.createElement('div', { className: 'bg-black/80 px-6 py-2 border-2 border-white rounded-xl text-3xl font-black italic flex items-baseline gap-2' },
+                        React.createElement('span', null, Math.floor(Math.abs(state.vehicle.speed) * 32)),
+                        React.createElement('span', { className: 'text-xs opacity-50' }, 'KM/H')
                     )
                 ),
                 React.createElement('div', { className: 'absolute bottom-6 left-6 text-[10px] opacity-40 ui-element flex flex-col gap-1' },
                     React.createElement('span', null, 'WASD: MOVE | F: EXIT | Q: TRANSMISSION | 1-4: SLOTS'),
-                    React.createElement('span', null, 'SPACE: ROLL (INVINCIBLE) | SHIFT: WALK'),
-                    React.createElement('span', null, 'RMB: AIM | LMB: FIRE/THROW | TAB: RELOAD')
+                    React.createElement('span', null, 'SPACE: ROLL (INVINCIBLE FRAMES) | SHIFT: WALK'),
+                    React.createElement('span', null, 'RMB: AIM | LMB: FIRE/THROW | TAB: RELOAD (UI ONLY)')
                 ),
-                state.player.health <= 0 && React.createElement('div', { className: 'absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-50 animate-fade-in' },
-                    React.createElement('h1', { className: 'text-white text-9xl font-black mb-12 animate-wasted tracking-tighter shadow-[0_0_50px_rgba(255,255,255,0.3)]' }, 'WASTED'),
-                    React.createElement('button', { className: 'px-24 py-6 bg-fuchsia-600 text-white font-black text-3xl hover:bg-fuchsia-400 transition-all pointer-events-auto shadow-[0_0_40px_rgba(255,0,255,0.5)] active:scale-95', onClick: () => { location.reload(true); } }, 'REBOOT SYSTEM')
+                state.player.health <= 0 && React.createElement('div', { className: 'absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-50 animate-fade-in' },
+                    React.createElement('h1', { className: 'text-white text-9xl font-black mb-12 animate-wasted' }, 'WASTED'),
+                    React.createElement('button', { className: 'px-24 py-6 bg-white text-black font-black text-3xl hover:bg-yellow-400 transition-all pointer-events-auto shadow-[0_0_30px_white]', onClick: () => { localStorage.clear(); setGameKey(k => k+1); } }, 'RESPAWN')
                 )
             );
         };
