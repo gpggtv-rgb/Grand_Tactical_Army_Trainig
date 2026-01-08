@@ -1,10 +1,11 @@
 
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Grand Tactical Army Training - VER.0.0.2</title>
+    <title>Grand Tactical Army Training - VER.0.0.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; font-family: 'Courier New', Courier, monospace; }
@@ -22,8 +23,8 @@
     <script type="importmap">
     {
       "imports": {
-        "react": "https://esm.sh/react@19.0.0",
-        "react-dom/client": "https://esm.sh/react-dom@19.0.0/client"
+        "react": "https://esm.sh/react@^19.2.3",
+        "react-dom/client": "https://esm.sh/react-dom@^19.2.3/client"
       }
     }
     </script>
@@ -569,8 +570,8 @@
             return React.createElement('div', { className: 'relative w-screen h-screen bg-black text-white overflow-hidden font-mono select-none' },
                 React.createElement(GameCanvas, { key: gameKey, gameKey, onUpdate: setState }),
                 React.createElement('div', { className: 'absolute bottom-2 right-2 text-[10px] opacity-30 ui-element flex flex-col items-end' }, 
-                    React.createElement('span', null, 'VER.0.0.2'),
-                    React.createElement('span', null, '[release: alpha-2-restored]')
+                    React.createElement('span', null, 'VER.0.0.3'),
+                    React.createElement('span', null, '[release: alpha-3]')
                 ),
                 React.createElement('div', { className: 'absolute top-6 left-6 flex flex-col gap-4 ui-element' },
                     React.createElement('div', { className: 'bg-black/90 border-l-8 border-yellow-500 px-6 py-2 text-yellow-400 text-6xl font-black italic shadow-lg' }, formatTime(state.gameTime)),
