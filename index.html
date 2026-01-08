@@ -8,7 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; font-family: 'Courier New', Courier, monospace; }
-        canvas { display: block; touch-action: none; }
+        canvas { display: block; touch-action: none; cursor: none; }
         .ui-element { pointer-events: none; user-select: none; }
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
         .animate-fade-in { animation: fade-in 0.8s ease-out forwards; }
@@ -31,51 +31,53 @@
         // --- Constants & Config ---
         const TILE_SIZE = 240; 
         const CITY_SIZE = 40;
-        const FRICTION = 0.94;
         const DRAG = 0.985;
         const PLAYER_RUN_SPEED = 5.5;
         const PLAYER_WALK_SPEED = 2.6;
-        const ROLL_SPEED = 9.5;
-        const STAMINA_REGEN = 0.3;
-        const STAMINA_RUN_COST = 0.2;
-        const THROW_CHARGE_RATE = 0.2; // units per second
-        const MAX_THROW_DIST = 2.8;
+        const ROLL_SPEED = 10.2;
+        const STAMINA_REGEN = 0.4;
+        const STAMINA_RUN_COST = 0.25;
+        const THROW_CHARGE_RATE = 0.2; 
+        const MAX_THROW_DIST = 2.4;
+        const MIN_THROW_DIST = 0.5;
 
         const COLORS = {
-            ROAD: '#1a1a1a', SIDEWALK: '#333', BUILDING: '#121222', BUILDING_TOP: '#1a1a30',
-            PLAYER: '#00ffcc', PED: '#ffffff', MIST: 'rgba(0, 0, 0, 0.94)', WRECK: '#0a0a0a',
-            LANE_MARK: 'rgba(255, 255, 255, 0.2)', CROSSWALK: 'rgba(255, 255, 255, 0.3)'
+            ROAD: '#1c1c1c', SIDEWALK: '#353535', BUILDING: '#151525', BUILDING_TOP: '#1e1e35',
+            PLAYER: '#00ffcc', PED: '#ffffff', WRECK: '#0a0a0a',
+            LANE_MARK: 'rgba(255, 255, 255, 0.08)', BLOOD: 'rgba(160, 0, 0, 0.65)'
         };
 
         const WeaponTypes = { MELEE: 'MELEE', PISTOL: 'PISTOL', RIFLE: 'RIFLE', THROWABLE: 'THROWABLE' };
         
         const WEAPON_DATA = {
             [WeaponTypes.MELEE]: {
-                FIST: { name: 'FIST', damage: 20, cooldown: 12, range: 75, durability: Infinity, color: '#fca5a5' },
-                BAT: { name: 'BASEBALL BAT', damage: 45, cooldown: 20, range: 95, durability: 40, color: '#fde68a' }
+                FIST: { name: 'FIST', damage: 35, cooldown: 20, range: 85, zoomBonus: 0.05, color: '#fca5a5' },
+                BAT: { name: 'BAT', damage: 60, cooldown: 28, range: 105, zoomBonus: 0.05, durability: 40, color: '#fde68a' }
             },
             [WeaponTypes.PISTOL]: {
-                GLOCK: { name: 'GLOCK', damage: 30, cooldown: 15, ammo: 15, maxAmmo: 120, color: '#93c5fd' },
-                DEAGLE: { name: 'D-EAGLE', damage: 85, cooldown: 35, ammo: 7, maxAmmo: 50, color: '#6366f1' }
+                GLOCK: { name: 'GLOCK', damage: 32, cooldown: 15, zoomBonus: 0.4, color: '#93c5fd' },
+                DEAGLE: { name: 'DEAGLE', damage: 95, cooldown: 38, zoomBonus: 0.45, color: '#6366f1' }
             },
             [WeaponTypes.RIFLE]: {
-                AK47: { name: 'AK-47', damage: 28, cooldown: 7, ammo: 30, maxAmmo: 210, color: '#f87171' },
-                M249: { name: 'M249 SAW', damage: 25, cooldown: 5, ammo: 100, maxAmmo: 500, color: '#fb923c' }
+                AK47: { name: 'AK-47', damage: 35, cooldown: 8, zoomBonus: 0.6, color: '#f87171' },
+                M249: { name: 'M249', damage: 30, cooldown: 6, zoomBonus: 0.65, color: '#fb923c' }
             },
             [WeaponTypes.THROWABLE]: {
-                GRENADE: { name: 'GRENADE', damage: 220, cooldown: 80, radius: 180, color: '#4ade80' },
-                MOLOTOV: { name: 'MOLOTOV', damage: 20, cooldown: 60, radius: 140, color: '#fbbf24' }
+                GRENADE: { name: 'GRENADE', damage: 300, radius: 210, zoomBonus: 0.3, color: '#4ade80' },
+                MOLOTOV: { name: 'MOLOTOV', damage: 40, radius: 160, zoomBonus: 0.3, color: '#fbbf24' }
             }
         };
 
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const playSfx = (freq, type, dur, vol) => {
+        const playSfx = (freq, type, dur, vol, freqEnd = null) => {
             try {
                 const osc = audioCtx.createOscillator();
                 const g = audioCtx.createGain();
-                osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                osc.type = type; 
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                if (freqEnd !== null) osc.frequency.exponentialRampToValueAtTime(freqEnd, audioCtx.currentTime + dur);
                 g.gain.setValueAtTime(vol, audioCtx.currentTime);
-                g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur);
+                g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
                 osc.connect(g); g.connect(audioCtx.destination);
                 osc.start(); osc.stop(audioCtx.currentTime + dur);
             } catch(e) {}
@@ -86,9 +88,9 @@
             for (let y = 0; y < CITY_SIZE; y++) {
                 grid[y] = [];
                 for (let x = 0; x < CITY_SIZE; x++) {
-                    if (x % 6 === 0 || y % 6 === 0) grid[y][x] = 1; // 2-lane Road
-                    else if (x % 6 === 1 || x % 6 === 5 || y % 6 === 1 || y % 6 === 5) grid[y][x] = 2; // Sidewalk
-                    else grid[y][x] = 3; // Building
+                    if (x % 6 === 0 || y % 6 === 0) grid[y][x] = 1; 
+                    else if (x % 6 === 1 || x % 6 === 5 || y % 6 === 1 || y % 6 === 5) grid[y][x] = 2; 
+                    else grid[y][x] = 3; 
                 }
             }
             return grid;
@@ -98,41 +100,51 @@
             const canvasRef = useRef(null);
             const engine = useRef({
                 player: {
-                    pos: { x: TILE_SIZE * 6.5, y: TILE_SIZE * 6.5 }, angle: 0, health: 100, stamina: 100,
+                    id: 'player', pos: { x: TILE_SIZE * 6.5, y: TILE_SIZE * 6.5 }, angle: 0, health: 100, stamina: 100,
                     inventory: {
                         [WeaponTypes.MELEE]: { key: 'FIST', durability: Infinity },
-                        [WeaponTypes.PISTOL]: { key: 'GLOCK', ammo: 15 },
+                        [WeaponTypes.PISTOL]: { key: 'GLOCK', ammo: 20 },
                         [WeaponTypes.RIFLE]: { key: 'AK47', ammo: 30 },
                         [WeaponTypes.THROWABLE]: { key: 'GRENADE', ammo: 5 }
                     },
                     selectedSlot: WeaponTypes.MELEE,
                     vehicleId: null, radius: 22, state: 'idle', rollAngle: 0, rollTimer: 0,
-                    throwCharge: 0, lastShot: 0, swingTimer: 0, swingSide: 1
+                    throwCharge: 0, lastShot: 0, swingTimer: 0, swingSide: 1, aimExtend: 0,
+                    transmission: 'auto' // 'auto' or 'manual'
                 },
                 vehicles: [], peds: [], projectiles: [], particles: [], explosions: [],
                 map: generateMap(), keys: {}, mouse: { x: 0, y: 0, left: false, right: false },
-                camera: { zoom: 1.0 }, score: 0, lastTime: performance.now(), lightCycle: 0
+                camera: { currentZoom: 0.9 }, lastTime: performance.now(),
+                gameTime: 10.5 
             });
 
             useEffect(() => {
                 const eng = engine.current;
-                eng.vehicles = []; eng.peds = [];
-                
+                eng.vehicles = []; eng.peds = []; eng.particles = [];
+                const vehicleTypes = [
+                    { name: 'Sedan', color: '#55a', radius: 60, speed: 4.5 },
+                    { name: 'SUV', color: '#a55', radius: 65, speed: 3.8 },
+                    { name: 'Sports', color: '#aa5', radius: 58, speed: 6.2 }
+                ];
+
                 for (let i = 0; i < 45; i++) {
                     const roadX = Math.floor(Math.random() * 6) * 6;
                     const roadY = Math.floor(Math.random() * CITY_SIZE);
                     const lane = Math.random() > 0.5 ? 1 : -1;
+                    const type = vehicleTypes[Math.floor(Math.random() * vehicleTypes.length)];
                     eng.vehicles.push({
                         id: `v-${i}`, pos: { x: roadX * TILE_SIZE + TILE_SIZE/2 + (lane * TILE_SIZE/4), y: roadY * TILE_SIZE },
-                        angle: Math.PI / 2, speed: 1.5 + Math.random() * 2, health: 100, gear: 1, 
-                        color: `hsl(${Math.random() * 360}, 50%, 45%)`, radius: 58, driver: 'npc', isWreck: false,
-                        laneOffset: lane * TILE_SIZE/4, stopTimer: 0
+                        angle: Math.PI / 2, speed: 0, health: 100, gear: 1, type: type.name,
+                        color: type.color, radius: type.radius, maxSpeed: type.speed, driver: 'npc', isWreck: false,
+                        laneOffset: lane * TILE_SIZE/4, crumpleOffsets: Array(4).fill(0).map(() => ({x:0, y:0})),
+                        burnTimer: 0, blockedTimer: 0, reverseTimer: 0
                     });
                 }
                 for (let i = 0; i < 80; i++) {
                     eng.peds.push({ 
                         id: `p-${i}`, pos: { x: Math.random() * CITY_SIZE * TILE_SIZE, y: Math.random() * CITY_SIZE * TILE_SIZE }, 
-                        angle: Math.random() * Math.PI * 2, health: 100, radius: 20, walkTimer: Math.random() * 200
+                        angle: Math.random() * Math.PI * 2, health: 100, radius: 20, walkTimer: Math.random() * 200,
+                        isDead: false, deathTimer: 0, aiState: 'wander', target: null, knockback: { x: 0, y: 0 }
                     });
                 }
 
@@ -144,7 +156,17 @@
                         if (e.code === 'Digit3') eng.player.selectedSlot = WeaponTypes.RIFLE;
                         if (e.code === 'Digit4') eng.player.selectedSlot = WeaponTypes.THROWABLE;
                         if (e.code === 'KeyF') toggleVehicle();
-                        if (e.code === 'KeyE' && eng.player.vehicleId) shiftGear();
+                        if (e.code === 'KeyQ') {
+                            eng.player.transmission = eng.player.transmission === 'auto' ? 'manual' : 'auto';
+                            playSfx(440, 'sine', 0.1, 0.05);
+                        }
+                        if (e.code === 'KeyE' && eng.player.vehicleId) {
+                            const v = eng.vehicles.find(v => v.id === eng.player.vehicleId);
+                            if (v && eng.player.transmission === 'manual') {
+                                v.gear = (v.gear % 4) + 1;
+                                playSfx(600, 'triangle', 0.05, 0.1, 400);
+                            }
+                        }
                     }
                 };
                 window.addEventListener('keydown', (e) => handleKey(e, true));
@@ -158,244 +180,205 @@
                 return () => cancelAnimationFrame(frame);
             }, [gameKey]);
 
-            const shiftGear = () => {
-                const eng = engine.current;
-                const v = eng.vehicles.find(v => v.id === eng.player.vehicleId);
-                if (v && !v.isWreck) {
-                    const gears = [-1, 1, 2, 3, 4];
-                    v.gear = gears[(gears.indexOf(v.gear) + 1) % gears.length];
-                    playSfx(200 + v.gear * 50, 'triangle', 0.1, 0.05);
-                }
-            };
-
             const toggleVehicle = () => {
-                const eng = engine.current;
-                const p = eng.player;
+                const eng = engine.current; const p = eng.player;
                 if (p.vehicleId) {
                     const v = eng.vehicles.find(v => v.id === p.vehicleId);
-                    if (v) { p.vehicleId = null; v.driver = 'npc'; p.pos.x += Math.cos(v.angle + Math.PI/2) * 120; p.pos.y += Math.sin(v.angle + Math.PI/2) * 120; }
+                    if (v) { p.vehicleId = null; v.driver = 'npc'; v.gear = 1; p.pos.x += Math.cos(v.angle + Math.PI/2) * 130; p.pos.y += Math.sin(v.angle + Math.PI/2) * 130; }
                 } else {
-                    const v = eng.vehicles.find(v => !v.isWreck && Math.hypot(v.pos.x - p.pos.x, v.pos.y - p.pos.y) < 130);
-                    if (v) { p.vehicleId = v.id; v.driver = 'player'; v.speed = 0; }
+                    const v = eng.vehicles.find(v => !v.isWreck && Math.hypot(v.pos.x - p.pos.x, v.pos.y - p.pos.y) < 145);
+                    if (v) { p.vehicleId = v.id; v.driver = 'player'; v.speed = 0; v.gear = 1; }
                 }
             };
 
             const loop = (time) => {
                 const dt = Math.min(2.0, (time - engine.current.lastTime) / 16.67);
                 engine.current.lastTime = time;
-                engine.current.lightCycle = (engine.current.lightCycle + dt) % 1000;
+                engine.current.gameTime = (engine.current.gameTime + (dt * 16.67 / 12000)) % 24;
                 for (let i = 0; i < 4; i++) updatePhysics(dt / 4);
                 render();
                 requestAnimationFrame(loop);
             };
 
-            const updatePhysics = (dt) => {
+            const spawnBlood = (pos, dir = null) => {
                 const eng = engine.current;
-                const p = eng.player;
-                if (p.health <= 0) return;
+                eng.particles.push({
+                    type: 'blood', pos: { ...pos }, life: 600, size: 18 + Math.random() * 25, angle: Math.random() * Math.PI * 2,
+                    vel: dir ? { x: dir.x * 2.5, y: dir.y * 2.5 } : { x: (Math.random()-0.5)*2, y: (Math.random()-0.5)*2 }
+                });
+            };
 
+            const updatePhysics = (dt) => {
+                const eng = engine.current; const p = eng.player;
+                if (p.health <= 0) return;
                 const isAiming = eng.mouse.right && !p.vehicleId;
+                p.aimExtend += (isAiming ? 1 - p.aimExtend : -p.aimExtend) * 0.06 * dt;
                 
-                // Vehicle AI: Lane keeping & Stop for player
                 eng.vehicles.forEach(v => {
-                    if (v.isWreck) return;
+                    if (v.isWreck) { if (v.burnTimer > 0) v.burnTimer -= dt; return; }
                     if (v.driver === 'player') {
-                        const gearT = [0, 1.4, 1.0, 0.7, 0.5]; const gearM = [0, 7, 12, 18, 26];
-                        if (v.gear === -1) {
-                            if (eng.keys['KeyW']) v.speed -= 0.18 * dt; if (eng.keys['KeyS']) v.speed += 0.1 * dt;
-                            v.speed = Math.max(-7, v.speed);
-                        } else {
-                            if (eng.keys['KeyW']) v.speed += 0.4 * gearT[v.gear] * dt; if (eng.keys['KeyS']) v.speed -= 0.7 * dt;
-                            v.speed = Math.min(gearM[v.gear], v.speed);
+                        const gearT = [0, 1.4, 1.0, 0.7, 0.5]; 
+                        const gearM = [0, 7.5, 13, 19, 28];
+                        
+                        if (p.transmission === 'auto') {
+                            const absSpeed = Math.abs(v.speed);
+                            if (absSpeed > 20) v.gear = 4;
+                            else if (absSpeed > 13) v.gear = 3;
+                            else if (absSpeed > 6) v.gear = 2;
+                            else v.gear = 1;
                         }
+
+                        if (eng.keys['KeyS'] && eng.keys['KeyW']) v.speed *= Math.pow(0.75, dt);
+                        else if (eng.keys['KeyW']) v.speed = Math.min(gearM[v.gear], v.speed + 0.45 * gearT[v.gear] * dt);
+                        else if (eng.keys['KeyS']) v.speed = Math.max(-6.5, v.speed - 0.75 * dt);
+                        
                         const turnFac = Math.min(1, Math.abs(v.speed) / 5);
-                        if (eng.keys['KeyA']) v.angle -= 0.08 * turnFac * dt; if (eng.keys['KeyD']) v.angle += 0.08 * turnFac * dt;
+                        if (eng.keys['KeyA']) v.angle -= 0.085 * turnFac * dt;
+                        if (eng.keys['KeyD']) v.angle += 0.085 * turnFac * dt;
                         v.speed *= Math.pow(DRAG, dt);
                         v.pos.x += Math.cos(v.angle) * v.speed * dt; v.pos.y += Math.sin(v.angle) * v.speed * dt;
                         p.pos = { ...v.pos }; p.angle = v.angle;
                     } else {
-                        // NPC Traffic: Lane strictly followed, stops for player
-                        const distToP = Math.hypot(p.pos.x - v.pos.x, p.pos.y - v.pos.y);
-                        const playerInFront = (distToP < 150) && (Math.abs(((Math.atan2(p.pos.y - v.pos.y, p.pos.x - v.pos.x) - v.angle + Math.PI*3) % (Math.PI*2)) - Math.PI) < 0.8);
-                        
-                        const tx = Math.floor(v.pos.x / TILE_SIZE); const ty = Math.floor(v.pos.y / TILE_SIZE);
-                        const isRed = (eng.lightCycle < 450) && (tx % 6 === 0 || ty % 6 === 0);
-                        const intersectionStop = isRed && (Math.hypot(v.pos.x % TILE_SIZE - TILE_SIZE/2, v.pos.y % TILE_SIZE - TILE_SIZE/2) < 80);
-
-                        if (playerInFront || intersectionStop) v.speed *= Math.pow(0.85, dt);
-                        else v.speed = Math.min(v.speed + 0.05 * dt, 4);
-
+                        const entities = [...eng.peds.filter(n => !n.isDead), p];
+                        let dangerPed = entities.find(e => Math.hypot(e.pos.x - v.pos.x, e.pos.y - v.pos.y) < 180);
+                        let isBlocked = false;
+                        const frontX = v.pos.x + Math.cos(v.angle) * 120;
+                        const frontY = v.pos.y + Math.sin(v.angle) * 120;
+                        if (eng.map[Math.floor(frontY/TILE_SIZE)]?.[Math.floor(frontX/TILE_SIZE)] === 3) isBlocked = true;
+                        if (v.reverseTimer > 0) { v.reverseTimer -= dt; v.speed = -2.5; v.angle += 0.02 * dt; }
+                        else {
+                            if (dangerPed || isBlocked) { v.speed *= Math.pow(0.8, dt); if (Math.abs(v.speed) < 0.2) v.blockedTimer += dt; }
+                            else { v.speed = Math.min(v.speed + 0.1 * dt, v.maxSpeed); v.blockedTimer = 0; }
+                            if (v.blockedTimer > 100) { v.reverseTimer = 60; v.blockedTimer = 0; }
+                        }
                         v.pos.x += Math.cos(v.angle) * v.speed * dt; v.pos.y += Math.sin(v.angle) * v.speed * dt;
-                        // Turn Logic at Intersection
-                        if (tx % 6 === 0 && ty % 6 === 0 && Math.random() < 0.01) v.angle += (Math.random() > 0.5 ? 1 : -1) * Math.PI / 2;
                     }
                     checkWall(v);
                 });
 
-                // Player Movement & Interaction
                 if (!p.vehicleId) {
                     if (p.state === 'rolling') {
                         p.pos.x += Math.cos(p.angle) * ROLL_SPEED * dt; p.pos.y += Math.sin(p.angle) * ROLL_SPEED * dt;
                         p.rollAngle += 0.35 * dt; p.rollTimer -= dt;
                         if (p.rollTimer <= 0) { p.state = 'idle'; p.rollAngle = 0; }
                     } else {
-                        const isWalking = eng.keys['ShiftLeft'] || isAiming;
-                        const speed = isWalking ? PLAYER_WALK_SPEED : PLAYER_RUN_SPEED;
+                        const speed = (eng.keys['ShiftLeft'] || isAiming) ? PLAYER_WALK_SPEED : PLAYER_RUN_SPEED;
                         let mx = 0, my = 0;
                         if (eng.keys['KeyW']) my -= 1; if (eng.keys['KeyS']) my += 1;
                         if (eng.keys['KeyA']) mx -= 1; if (eng.keys['KeyD']) mx += 1;
                         if (mx !== 0 || my !== 0) {
-                            const ang = Math.atan2(my, mx);
-                            p.pos.x += Math.cos(ang) * speed * dt; p.pos.y += Math.sin(ang) * speed * dt;
+                            const ang = Math.atan2(my, mx); p.pos.x += Math.cos(ang) * speed * dt; p.pos.y += Math.sin(ang) * speed * dt;
                             if (!isAiming) p.angle = ang;
-                            if (!isWalking) p.stamina = Math.max(0, p.stamina - STAMINA_RUN_COST * dt);
-                        } else {
-                            p.stamina = Math.min(100, p.stamina + STAMINA_REGEN * dt);
-                        }
-                        if (eng.keys['Space'] && p.stamina > 30) { p.state = 'rolling'; p.rollTimer = 22; p.stamina -= 30; playSfx(120, 'sine', 0.2, 0.1); }
-                        
-                        // Throwable Logic
+                            if (speed > PLAYER_WALK_SPEED) p.stamina = Math.max(0, p.stamina - STAMINA_RUN_COST * dt);
+                        } else p.stamina = Math.min(100, p.stamina + STAMINA_REGEN * dt);
+                        if (eng.keys['Space'] && p.stamina > 35) { p.state = 'rolling'; p.rollTimer = 22; p.stamina -= 35; playSfx(100, 'sine', 0.2, 0.1, 50); }
                         if (p.selectedSlot === WeaponTypes.THROWABLE) {
-                            if (eng.mouse.right) {
-                                p.throwCharge = Math.min(MAX_THROW_DIST, p.throwCharge + (THROW_CHARGE_RATE * (dt/16.67))); 
-                                if (eng.mouse.left) { throwObject(p); p.throwCharge = 0; }
-                            } else { p.throwCharge = 0; }
-                        } else {
-                            if (eng.mouse.left) fireWeapon(p);
-                        }
+                            if (eng.mouse.right) { p.throwCharge = Math.min(MAX_THROW_DIST, p.throwCharge + (THROW_CHARGE_RATE * (dt/16.67))); if (eng.mouse.left && p.throwCharge >= MIN_THROW_DIST) { throwObject(p); p.throwCharge = 0; } }
+                            else p.throwCharge = 0;
+                        } else if (eng.mouse.left) fireWeapon(p);
                     }
                     if (isAiming) { const c = canvasRef.current; if (c) p.angle = Math.atan2(eng.mouse.y - c.height/2, eng.mouse.x - c.width/2); }
                     if (p.swingTimer > 0) p.swingTimer -= dt;
                     checkWall(p);
                 }
 
-                // Projectiles
                 eng.projectiles = eng.projectiles.filter(pr => {
                     pr.pos.x += pr.vel.x * dt; pr.pos.y += pr.vel.y * dt; pr.life -= dt;
                     let hit = false;
-                    [...eng.peds, p].forEach(target => {
-                        if (target.id === pr.owner || target.health <= 0) return;
+                    [...eng.peds, p, ...eng.vehicles].forEach(target => {
+                        if (target.id === pr.owner || target.health <= 0 || target.isWreck || target.isDead) return;
                         if (Math.hypot(target.pos.x - pr.pos.x, target.pos.y - pr.pos.y) < target.radius + pr.radius) {
                             target.health -= pr.damage; hit = true;
-                            if (target.health <= 0) eng.score += 100;
+                            if (target.knockback) { target.knockback.x += pr.vel.x * 0.2; target.knockback.y += pr.vel.y * 0.2; }
+                            playSfx(400, 'sawtooth', 0.05, 0.1, 200); 
+                            if (target.id.startsWith('p-')) { spawnBlood(target.pos, {x: pr.vel.x/40, y: pr.vel.y/40}); if (target.id !== 'player') { target.aiState = 'flee'; target.target = p; } }
+                            if (target.health <= 0) { if (target.crumpleOffsets) destroyVehicle(target); else { target.isDead = true; target.deathTimer = 600; playSfx(180, 'square', 0.15, 0.08); } }
                         }
                     });
-                    if (pr.life <= 0 && pr.isBomb) {
-                        eng.explosions.push({ pos: { ...pr.pos }, life: 35, radius: pr.bombConfig.radius, damage: pr.bombConfig.damage });
-                        playSfx(80, 'sawtooth', 0.5, 0.2);
-                    }
+                    if (pr.life <= 0 && pr.isBomb) { eng.explosions.push({ pos: { ...pr.pos }, life: 45, radius: pr.bombConfig.radius, damage: pr.bombConfig.damage }); playSfx(50, 'sawtooth', 0.7, 0.3, 20); }
                     return !hit && pr.life > 0;
                 });
 
-                eng.explosions = eng.explosions.filter(ex => {
-                    ex.life -= dt;
-                    if (ex.life > 32) {
-                        [...eng.peds, p].forEach(target => {
-                            const d = Math.hypot(target.pos.x - ex.pos.x, target.pos.y - ex.pos.y);
-                            if (d < ex.radius) target.health -= (ex.damage * (1 - d/ex.radius)) * dt;
-                        });
-                    }
-                    return ex.life > 0;
-                });
-
-                // NPC AI & Physics Collision (Circle-Circle)
                 eng.peds.forEach(npc => {
-                    npc.walkTimer -= dt;
-                    if (npc.walkTimer <= 0) { npc.angle = Math.random() * Math.PI * 2; npc.walkTimer = 100 + Math.random() * 200; }
-                    npc.pos.x += Math.cos(npc.angle) * 2.2 * dt; npc.pos.y += Math.sin(npc.angle) * 2.2 * dt;
+                    if (npc.isDead) { npc.deathTimer -= dt; return; }
+                    if (npc.knockback.x !== 0 || npc.knockback.y !== 0) {
+                        npc.pos.x += npc.knockback.x * dt; npc.pos.y += npc.knockback.y * dt;
+                        npc.knockback.x *= Math.pow(0.85, dt); npc.knockback.y *= Math.pow(0.85, dt);
+                    }
+                    if (npc.aiState === 'flee' && npc.target) {
+                        npc.angle = Math.atan2(npc.pos.y - npc.target.pos.y, npc.pos.x - npc.target.pos.x);
+                        npc.pos.x += Math.cos(npc.angle) * 3.5 * dt; npc.pos.y += Math.sin(npc.angle) * 3.5 * dt;
+                    } else {
+                        npc.walkTimer -= dt;
+                        if (npc.walkTimer <= 0) { npc.angle = Math.random() * Math.PI * 2; npc.walkTimer = 120 + Math.random() * 200; }
+                        npc.pos.x += Math.cos(npc.angle) * 2.2 * dt; npc.pos.y += Math.sin(npc.angle) * 2.2 * dt;
+                    }
                     checkWall(npc);
                 });
 
                 resolveCollisions(dt);
-                onUpdate({ player: p, score: eng.score, vehicle: eng.vehicles.find(v => v.id === p.vehicleId) });
+                eng.particles = eng.particles.filter(pa => pa.life > 0);
+                onUpdate({ player: p, vehicle: eng.vehicles.find(v => v.id === p.vehicleId), gameTime: eng.gameTime });
             };
 
             const resolveCollisions = (dt) => {
-                const eng = engine.current;
-                const p = eng.player;
-                const entities = [...eng.peds, p];
-                
-                // Ped-Ped & Ped-Player Collision
+                const eng = engine.current; const entities = [...eng.peds.filter(n => !n.isDead), eng.player];
                 for(let i=0; i<entities.length; i++) {
                     for(let j=i+1; j<entities.length; j++) {
-                        const a = entities[i], b = entities[j];
-                        if (a.vehicleId || b.vehicleId) continue;
-                        const dx = b.pos.x - a.pos.x, dy = b.pos.y - a.pos.y;
-                        const dist = Math.hypot(dx, dy);
+                        const a = entities[i], b = entities[j]; if (a.vehicleId || b.vehicleId) continue;
+                        const dist = Math.hypot(b.pos.x - a.pos.x, b.pos.y - a.pos.y);
                         const minDist = a.radius + b.radius;
                         if (dist < minDist) {
-                            const overlap = minDist - dist;
-                            const nx = dx/dist, ny = dy/dist;
+                            const overlap = minDist - dist; const nx = (b.pos.x - a.pos.x)/dist, ny = (b.pos.y - a.pos.y)/dist;
                             a.pos.x -= nx * overlap * 0.5; a.pos.y -= ny * overlap * 0.5;
                             b.pos.x += nx * overlap * 0.5; b.pos.y += ny * overlap * 0.5;
                         }
                     }
                 }
-                // Vehicle Collisions with entities
-                eng.vehicles.forEach(v => {
-                    entities.forEach(ent => {
-                        if (ent.vehicleId === v.id) return;
-                        const d = Math.hypot(v.pos.x - ent.pos.x, v.pos.y - ent.pos.y);
-                        if (d < v.radius + ent.radius - 10) {
-                            if (Math.abs(v.speed) > 2.5) ent.health -= Math.abs(v.speed) * 12;
-                            const nx = (ent.pos.x - v.pos.x)/d, ny = (ent.pos.y - v.pos.y)/d;
-                            ent.pos.x += nx * 15; ent.pos.y += ny * 15;
-                        }
-                    });
-                });
             };
 
             const fireWeapon = (p) => {
-                const eng = engine.current;
-                const slot = p.inventory[p.selectedSlot];
+                const eng = engine.current; const slot = p.inventory[p.selectedSlot];
                 const config = WEAPON_DATA[p.selectedSlot][slot.key];
                 if (Date.now() - p.lastShot < config.cooldown * 16.6) return;
                 p.lastShot = Date.now();
-
                 if (p.selectedSlot === WeaponTypes.MELEE) {
-                    p.swingTimer = 12; p.swingSide *= -1;
-                    playSfx(140, 'square', 0.1, 0.1);
+                    p.swingTimer = 15; p.swingSide *= -1; playSfx(150, 'square', 0.1, 0.15, 80);
                     eng.peds.forEach(npc => {
+                        if (npc.isDead) return;
                         const d = Math.hypot(npc.pos.x - p.pos.x, npc.pos.y - p.pos.y);
                         const a = Math.atan2(npc.pos.y - p.pos.y, npc.pos.x - p.pos.x);
-                        if (d < config.range && Math.abs(((a - p.angle + Math.PI*3) % (Math.PI*2)) - Math.PI) < 1.2) npc.health -= config.damage;
+                        if (d < config.range && Math.abs(((a - p.angle + Math.PI*3) % (Math.PI*2)) - Math.PI) < 1.0) {
+                            npc.health -= config.damage; npc.aiState = 'flee'; npc.target = p;
+                            npc.knockback.x = Math.cos(p.angle) * 12; npc.knockback.y = Math.sin(p.angle) * 12;
+                            playSfx(300, 'sawtooth', 0.08, 0.1, 100);
+                        }
                     });
-                } else if (p.selectedSlot === WeaponTypes.PISTOL || p.selectedSlot === WeaponTypes.RIFLE) {
-                    if (slot.ammo <= 0) return;
-                    slot.ammo--;
-                    playSfx(600, 'sawtooth', 0.06, 0.15);
-                    eng.projectiles.push({ pos: { ...p.pos }, vel: { x: Math.cos(p.angle)*35, y: Math.sin(p.angle)*35 }, owner: 'player', life: 25, radius: 5, damage: config.damage, color: config.color });
+                } else {
+                    if (slot.ammo <= 0) return; slot.ammo--; playSfx(750, 'sawtooth', 0.05, 0.18, 500);
+                    eng.projectiles.push({ pos: { x: p.pos.x + Math.cos(p.angle)*38, y: p.pos.y + Math.sin(p.angle)*38 }, vel: { x: Math.cos(p.angle)*48, y: Math.sin(p.angle)*48 }, owner: 'player', life: 30, radius: 5, damage: config.damage, color: config.color });
                 }
             };
 
             const throwObject = (p) => {
-                const eng = engine.current;
-                const slot = p.inventory[WeaponTypes.THROWABLE];
+                const eng = engine.current; const slot = p.inventory[WeaponTypes.THROWABLE];
                 const config = WEAPON_DATA[WeaponTypes.THROWABLE][slot.key];
-                if (slot.ammo <= 0) return;
-                slot.ammo--;
-                eng.projectiles.push({
-                    pos: { ...p.pos }, vel: { x: Math.cos(p.angle) * 15, y: Math.sin(p.angle) * 15 },
-                    owner: 'player', life: (p.throwCharge * TILE_SIZE) / 15, radius: 10, damage: 0,
-                    isBomb: true, bombConfig: config, color: config.color
-                });
-                playSfx(220, 'square', 0.15, 0.1);
+                if (slot.ammo <= 0) return; slot.ammo--;
+                eng.projectiles.push({ pos: { ...p.pos }, vel: { x: Math.cos(p.angle) * 19, y: Math.sin(p.angle) * 19 }, owner: 'player', life: (p.throwCharge * TILE_SIZE) / 19, radius: 10, damage: 0, isBomb: true, bombConfig: config, color: config.color });
             };
 
+            const destroyVehicle = (v) => { v.isWreck = true; v.speed = 0; v.burnTimer = 220; playSfx(60, 'sawtooth', 0.8, 0.35, 20); };
             const checkWall = (ent) => {
-                const { map } = engine.current;
-                const tx = Math.floor(ent.pos.x / TILE_SIZE), ty = Math.floor(ent.pos.y / TILE_SIZE);
+                const { map } = engine.current; const tx = Math.floor(ent.pos.x / TILE_SIZE), ty = Math.floor(ent.pos.y / TILE_SIZE);
                 for (let y = ty-1; y <= ty+1; y++) {
                     for (let x = tx-1; x <= tx+1; x++) {
                         if (map[y]?.[x] === 3) {
                             const bX = x * TILE_SIZE, bY = y * TILE_SIZE;
-                            const cX = Math.max(bX, Math.min(ent.pos.x, bX + TILE_SIZE));
-                            const cY = Math.max(bY, Math.min(ent.pos.y, bY + TILE_SIZE));
-                            const dx = ent.pos.x - cX, dy = ent.pos.y - cY;
-                            const d = Math.hypot(dx, dy);
+                            const cX = Math.max(bX, Math.min(ent.pos.x, bX + TILE_SIZE)); const cY = Math.max(bY, Math.min(ent.pos.y, bY + TILE_SIZE));
+                            const dx = ent.pos.x - cX, dy = ent.pos.y - cY; const d = Math.hypot(dx, dy);
                             if (d < ent.radius && d > 0) {
                                 ent.pos.x += (dx/d) * (ent.radius - d); ent.pos.y += (dy/d) * (ent.radius - d);
-                                if (ent.speed) ent.speed *= -0.35;
+                                if (ent.speed) { if (Math.abs(ent.speed) > 5 && ent.crumpleOffsets) { ent.health -= Math.abs(ent.speed)*2; v.crumpleOffsets = v.crumpleOffsets.map(o => ({ x: o.x + (Math.random()-0.5)*15, y: o.y + (Math.random()-0.5)*15 })); if (ent.health<=0) destroyVehicle(ent); } ent.speed *= -0.38; }
                             }
                         }
                     }
@@ -404,136 +387,140 @@
 
             const render = () => {
                 const canvas = canvasRef.current; if (!canvas) return;
-                const ctx = canvas.getContext('2d');
-                const eng = engine.current; const p = eng.player;
+                const ctx = canvas.getContext('2d'); const eng = engine.current; const p = eng.player;
                 canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-
                 const v = eng.vehicles.find(v => v.id === p.vehicleId);
-                const zoomT = p.vehicleId ? (0.55 - Math.abs(v?.speed || 0)*0.012) : (eng.mouse.right ? 0.65 : 0.9);
-                eng.camera.zoom += (zoomT - eng.camera.zoom) * 0.12;
+                const wConfig = WEAPON_DATA[p.selectedSlot][p.inventory[p.selectedSlot].key];
+                
+                const isNight = eng.gameTime < 6 || eng.gameTime > 19;
+                const nightVisionLevel = isNight ? 0.4 : 1.0;
+                const baseZoom = v ? (0.42 - Math.abs(v.speed)*0.009) : 0.88;
+                const zoomT = (baseZoom - (p.aimExtend * wConfig.zoomBonus)) * (isNight ? 0.75 : 1);
+                eng.camera.currentZoom += (zoomT - eng.camera.currentZoom) * 0.07;
 
-                ctx.fillStyle = '#060612'; ctx.fillRect(0,0, canvas.width, canvas.height);
-                ctx.save();
-                ctx.translate(canvas.width/2, canvas.height/2);
-                ctx.scale(eng.camera.zoom, eng.camera.zoom);
-                ctx.translate(-p.pos.x, -p.pos.y);
+                const ambientBrightness = isNight ? 0.02 : Math.sin((eng.gameTime - 6) * Math.PI / 12) * 0.5 + 0.3;
+                const sunAngle = (eng.gameTime - 12) * Math.PI / 12;
+                const shadowOff = { x: Math.cos(sunAngle) * 22, y: Math.sin(sunAngle) * 22 };
+                
+                ctx.fillStyle = isNight ? '#010105' : '#080815'; ctx.fillRect(0,0, canvas.width, canvas.height);
+                ctx.save(); ctx.translate(canvas.width/2, canvas.height/2); ctx.scale(eng.camera.currentZoom, eng.camera.currentZoom); ctx.translate(-p.pos.x, -p.pos.y);
 
-                // Roads & Landmarks
                 for (let y = 0; y < CITY_SIZE; y++) {
                     for (let x = 0; x < CITY_SIZE; x++) {
                         const t = eng.map[y][x]; const px = x * TILE_SIZE, py = y * TILE_SIZE;
-                        if (t === 1) { 
-                            ctx.fillStyle = COLORS.ROAD; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
-                            ctx.strokeStyle = COLORS.LANE_MARK; ctx.setLineDash([30, 40]); ctx.lineWidth = 6;
-                            ctx.beginPath(); ctx.moveTo(px+TILE_SIZE/2, py); ctx.lineTo(px+TILE_SIZE/2, py+TILE_SIZE); ctx.stroke();
-                            ctx.beginPath(); ctx.moveTo(px, py+TILE_SIZE/2); ctx.lineTo(px+TILE_SIZE, py+TILE_SIZE/2); ctx.stroke();
-                            ctx.setLineDash([]);
-                        } else if (t === 2) { ctx.fillStyle = COLORS.SIDEWALK; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE); }
-                        else if (t === 3) { ctx.fillStyle = COLORS.BUILDING; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE); ctx.fillStyle = COLORS.BUILDING_TOP; ctx.fillRect(px+25, py+25, TILE_SIZE-50, TILE_SIZE-50); }
+                        if (t === 1) { ctx.fillStyle = COLORS.ROAD; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE); }
+                        else if (t === 2) { ctx.fillStyle = COLORS.SIDEWALK; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE); }
+                        else if (t === 3) { ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(px + shadowOff.x*1.5, py + shadowOff.y*1.5, TILE_SIZE, TILE_SIZE); ctx.fillStyle = COLORS.BUILDING; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE); ctx.fillStyle = COLORS.BUILDING_TOP; ctx.fillRect(px+32, py+32, TILE_SIZE-64, TILE_SIZE-64); }
                     }
                 }
 
-                // Vehicles
-                eng.vehicles.forEach(v => {
-                    ctx.save(); ctx.translate(v.pos.x, v.pos.y); ctx.rotate(v.angle);
-                    ctx.fillStyle = v.color; ctx.fillRect(-50, -28, 100, 56);
-                    ctx.fillStyle = 'white'; ctx.fillRect(45, -24, 10, 10); ctx.fillRect(45, 14, 10, 10);
+                eng.particles.forEach(pa => { if (pa.type === 'blood') { ctx.fillStyle = COLORS.BLOOD; ctx.globalAlpha = Math.min(1, pa.life/180); ctx.beginPath(); ctx.arc(pa.pos.x, pa.pos.y, pa.size, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1; } });
+                eng.peds.forEach(ped => {
+                    if (ped.isDead) { ctx.save(); ctx.translate(ped.pos.x, ped.pos.y); ctx.globalAlpha = Math.min(1, ped.deathTimer/200); ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(0,0, ped.radius, 0, Math.PI*2); ctx.fill(); ctx.restore(); }
+                    else { ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.arc(ped.pos.x + shadowOff.x, ped.pos.y + shadowOff.y, ped.radius, 0, Math.PI*2); ctx.fill(); }
+                });
+
+                eng.vehicles.forEach(veh => {
+                    ctx.save(); ctx.translate(veh.pos.x, veh.pos.y); ctx.rotate(veh.angle);
+                    if (!veh.isWreck) {
+                        const isRev = veh.driver === 'player' && veh.speed < 0; const isBrake = veh.driver === 'player' && eng.keys['KeyS'] && veh.speed > 0;
+                        const headGrad = ctx.createRadialGradient(45, 0, 15, isNight ? 450 : 250, 0, isNight ? 300 : 180);
+                        headGrad.addColorStop(0, isNight ? 'rgba(255,255,220,0.6)' : 'rgba(255,255,220,0.2)'); headGrad.addColorStop(1, 'transparent');
+                        ctx.fillStyle = headGrad; ctx.beginPath(); ctx.moveTo(40, -35); ctx.lineTo(isNight ? 480 : 280, -120); ctx.lineTo(isNight ? 480 : 280, 120); ctx.lineTo(40, 35); ctx.fill();
+                        if (isRev || isBrake) { const tailGrad = ctx.createRadialGradient(-45, 0, 10, -180, 0, 140); tailGrad.addColorStop(0, isRev ? 'rgba(255,255,255,0.4)' : 'rgba(255,0,0,0.6)'); tailGrad.addColorStop(1, 'transparent'); ctx.fillStyle = tailGrad; ctx.beginPath(); ctx.moveTo(-40, -30); ctx.lineTo(-200, -80); ctx.lineTo(-200, 80); ctx.lineTo(-40, 30); ctx.fill(); }
+                    }
+                    ctx.fillStyle = veh.isWreck ? COLORS.WRECK : veh.color;
+                    const w = 58, h = 33;
+                    ctx.beginPath(); ctx.moveTo(-w+veh.crumpleOffsets[0].x, -h+veh.crumpleOffsets[0].y); ctx.lineTo(w+veh.crumpleOffsets[1].x, -h+veh.crumpleOffsets[1].y); ctx.lineTo(w+veh.crumpleOffsets[2].x, h+veh.crumpleOffsets[2].y); ctx.lineTo(-w+veh.crumpleOffsets[3].x, h+veh.crumpleOffsets[3].y); ctx.closePath(); ctx.fill();
+                    if (!veh.isWreck) {
+                        ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fillRect(-35, -28, 70, 56); // Roof
+                        ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(25, -24, 15, 48); // Windshield
+                        ctx.fillRect(-45, -24, 10, 48); // Rear Window
+                    }
+                    if (veh.burnTimer > 0) { ctx.fillStyle = '#ff6600'; ctx.beginPath(); ctx.arc((Math.random()-0.5)*30, (Math.random()-0.5)*30, 40*Math.random(), 0, Math.PI*2); ctx.fill(); }
                     ctx.restore();
                 });
 
-                // Combat Animation: Swing
                 const drawChar = (c, isP) => {
                     if (isP && c.vehicleId) return;
-                    ctx.save(); ctx.translate(c.pos.x, c.pos.y);
-                    if (isP && c.state === 'rolling') ctx.rotate(c.rollAngle); else ctx.rotate(c.angle);
-                    
-                    // Body
-                    ctx.fillStyle = isP ? COLORS.PLAYER : COLORS.PED;
-                    ctx.beginPath(); ctx.arc(0,0, c.radius, 0, Math.PI*2); ctx.fill();
-                    ctx.fillStyle = 'black'; ctx.fillRect(14, -5, 10, 10); // Direction
-
-                    // Swing Animation
-                    if (isP && c.swingTimer > 0) {
-                        ctx.fillStyle = WEAPON_DATA[p.selectedSlot][p.inventory[p.selectedSlot].key].color;
-                        const arc = (Math.sin(c.swingTimer * 0.4) * 50);
-                        ctx.beginPath(); ctx.arc(15 + arc, 18 * c.swingSide, 10, 0, Math.PI*2); ctx.fill();
-                    }
+                    ctx.save(); ctx.translate(c.pos.x, c.pos.y); if (isP && c.state === 'rolling') ctx.rotate(c.rollAngle * Math.PI * 2); else ctx.rotate(c.angle);
+                    ctx.fillStyle = isP ? COLORS.PLAYER : COLORS.PED; ctx.beginPath(); ctx.arc(0,0, c.radius, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = 'black'; ctx.fillRect(16, -4, 10, 8); 
+                    if (isP && c.swingTimer > 0) { ctx.fillStyle = COLORS.PLAYER; const ext = Math.sin(c.swingTimer * 0.22) * 30; ctx.beginPath(); ctx.arc(24 + ext, 15 * c.swingSide, 10, 0, Math.PI*2); ctx.fill(); }
                     ctx.restore();
                 };
-                eng.peds.forEach(ped => drawChar(ped, false));
-                drawChar(p, true);
-
-                // Projectiles (Glow)
-                eng.projectiles.forEach(pr => {
-                    ctx.fillStyle = pr.color || '#ff0'; ctx.shadowBlur = 15; ctx.shadowColor = pr.color || '#ff0';
-                    ctx.beginPath(); ctx.arc(pr.pos.x, pr.pos.y, pr.radius, 0, Math.PI*2); ctx.fill();
-                    ctx.shadowBlur = 0;
-                });
-
-                // Explosions
-                eng.explosions.forEach(ex => {
-                    const r = ex.radius * (1 - ex.life/35);
-                    ctx.fillStyle = `rgba(255, 120, 0, ${ex.life/35})`;
-                    ctx.beginPath(); ctx.arc(ex.pos.x, ex.pos.y, r, 0, Math.PI*2); ctx.fill();
-                });
-
-                // Throwable Indicator
-                if (p.throwCharge > 0) {
-                    ctx.strokeStyle = '#0f0'; ctx.setLineDash([10, 10]); ctx.lineWidth = 3;
-                    ctx.beginPath(); ctx.moveTo(p.pos.x, p.pos.y);
-                    ctx.lineTo(p.pos.x + Math.cos(p.angle)*p.throwCharge*TILE_SIZE, p.pos.y + Math.sin(p.angle)*p.throwCharge*TILE_SIZE);
-                    ctx.stroke(); ctx.setLineDash([]);
-                }
-
+                eng.peds.forEach(ped => { if(!ped.isDead) drawChar(ped, false); }); drawChar(p, true);
+                eng.projectiles.forEach(pr => { ctx.fillStyle = pr.color || '#fff'; ctx.shadowBlur = 15; ctx.shadowColor = pr.color || '#fff'; ctx.beginPath(); ctx.arc(pr.pos.x, pr.pos.y, pr.radius, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0; });
+                eng.explosions.forEach(ex => { ctx.fillStyle = `rgba(255, 120, 0, ${ex.life/45})`; ctx.beginPath(); ctx.arc(ex.pos.x, ex.pos.y, ex.radius * (1 - ex.life/45), 0, Math.PI*2); ctx.fill(); });
                 ctx.restore();
-                // UI Fog
-                const vision = (eng.mouse.right ? 1100 : (p.vehicleId ? 750 : 500)) / eng.camera.zoom;
-                const grad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, vision*0.3, canvas.width/2, canvas.height/2, vision*1.8);
-                grad.addColorStop(0, 'transparent'); grad.addColorStop(1, COLORS.MIST);
-                ctx.fillStyle = grad; ctx.fillRect(0,0, canvas.width, canvas.height);
+
+                const vision = (1000 + (p.aimExtend * 800) + (p.vehicleId ? 450 : 0)) / eng.camera.currentZoom;
+                const fogIntensity = isNight ? 0.995 : 0.945 - (ambientBrightness * 0.1);
+                const fogGrad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, vision*0.25, canvas.width/2, canvas.height/2, vision*1.8);
+                fogGrad.addColorStop(0, 'transparent'); fogGrad.addColorStop(1, `rgba(0,0,0,${fogIntensity})`);
+                ctx.fillStyle = fogGrad; ctx.fillRect(0,0, canvas.width, canvas.height);
+                ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(eng.mouse.x, eng.mouse.y, 2.5, 0, Math.PI*2); ctx.fill();
+
+                // Minimap
+                const mapS = 220; const mapX = canvas.width - mapS - 30; const mapY = canvas.height - mapS - 30;
+                ctx.fillStyle = 'rgba(0,0,0,0.9)'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.fillRect(mapX, mapY, mapS, mapS); ctx.strokeRect(mapX, mapY, mapS, mapS);
+                ctx.save(); ctx.beginPath(); ctx.rect(mapX, mapY, mapS, mapS); ctx.clip(); ctx.translate(mapX + mapS/2, mapY + mapS/2); ctx.scale(0.02, 0.02); ctx.translate(-p.pos.x, -p.pos.y);
+                for (let y = 0; y < CITY_SIZE; y++) { for (let x = 0; x < CITY_SIZE; x++) { if (eng.map[y][x] === 3) { ctx.fillStyle = '#223'; ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE); } } }
+                eng.peds.forEach(ped => { if(!ped.isDead && Math.hypot(ped.pos.x-p.pos.x, ped.pos.y-p.pos.y) < 1600) { ctx.fillStyle = 'red'; ctx.beginPath(); ctx.arc(ped.pos.x, ped.pos.y, 110, 0, Math.PI*2); ctx.fill(); } });
+                ctx.fillStyle = '#0f0'; ctx.beginPath(); ctx.arc(p.pos.x, p.pos.y, 160, 0, Math.PI*2); ctx.fill();
+                ctx.restore();
             };
-            return React.createElement('canvas', { ref: canvasRef, className: 'cursor-none' });
+            return React.createElement('canvas', { ref: canvasRef });
         };
 
         const App = () => {
             const [gameKey, setGameKey] = useState(0);
-            const [state, setState] = useState({ player: { health: 100, stamina: 100, inventory: {}, selectedSlot: WeaponTypes.MELEE }, score: 0, vehicle: null });
+            const [state, setState] = useState({ player: { health: 100, stamina: 100, inventory: {}, selectedSlot: WeaponTypes.MELEE, transmission: 'auto' }, vehicle: null, gameTime: 12 });
+            const slots = [WeaponTypes.MELEE, WeaponTypes.PISTOL, WeaponTypes.RIFLE, WeaponTypes.THROWABLE];
+
+            const formatTime = (t) => {
+                const h24 = Math.floor(t); const m = Math.floor((t % 1) * 60);
+                const ampm = h24 >= 12 ? 'PM' : 'AM';
+                const h12 = h24 % 12 || 12;
+                return `${h12.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
+            };
 
             return React.createElement('div', { className: 'relative w-screen h-screen bg-black text-white overflow-hidden font-mono select-none' },
                 React.createElement(GameCanvas, { key: gameKey, gameKey, onUpdate: setState }),
-                // UI Overlay
                 React.createElement('div', { className: 'absolute top-6 left-6 flex flex-col gap-4 ui-element' },
-                    React.createElement('div', { className: 'bg-black/90 border-l-8 border-green-600 px-6 py-2 text-green-400 text-5xl font-black italic' }, `$ ${state.score.toString().padStart(8, '0')}`),
+                    React.createElement('div', { className: 'bg-black/90 border-l-8 border-yellow-500 px-6 py-2 text-yellow-400 text-6xl font-black italic shadow-lg' }, formatTime(state.gameTime)),
                     React.createElement('div', { className: 'w-80 space-y-2' },
-                        React.createElement('div', { className: 'h-6 bg-gray-950 border-2 border-white/20 p-1' }, React.createElement('div', { className: 'h-full bg-red-600 shadow-[0_0_10px_red]', style: { width: `${state.player.health}%` } })),
-                        React.createElement('div', { className: 'h-3 bg-gray-950 border-2 border-white/20 p-0.5' }, React.createElement('div', { className: 'h-full bg-blue-500 shadow-[0_0_8px_blue]', style: { width: `${state.player.stamina}%` } }))
+                        React.createElement('div', { className: 'h-7 bg-gray-950 border-2 border-white/20 p-1' }, React.createElement('div', { className: 'h-full bg-red-600 shadow-[0_0_18px_red]', style: { width: `${state.player.health}%` } })),
+                        React.createElement('div', { className: 'h-3.5 bg-gray-950 border-2 border-white/20 p-0.5' }, React.createElement('div', { className: 'h-full bg-blue-500 shadow-[0_0_10px_blue]', style: { width: `${state.player.stamina}%` } }))
                     )
                 ),
-                // Weapons HUD
-                React.createElement('div', { className: 'absolute top-6 right-6 flex flex-col items-end gap-2 ui-element' },
-                    React.createElement('div', { className: 'flex gap-2 p-2 bg-black/70 border-b-4 border-yellow-500 rounded-lg' },
-                        [WeaponTypes.MELEE, WeaponTypes.PISTOL, WeaponTypes.RIFLE, WeaponTypes.THROWABLE].map((s, i) => (
-                            React.createElement('div', { key: s, className: `w-20 h-20 border-2 flex flex-col items-center justify-center ${state.player.selectedSlot === s ? 'border-yellow-400 bg-yellow-400/20' : 'border-white/10'}` },
-                                React.createElement('div', { className: 'text-[10px] opacity-40' }, i+1),
-                                React.createElement('div', { className: 'text-[8px] font-bold text-center' }, state.player.inventory[s]?.key || 'EMPTY'),
-                                React.createElement('div', { className: 'text-[9px] mt-1' }, state.player.inventory[s]?.ammo ?? '')
-                            )
-                        ))
+                React.createElement('div', { className: 'absolute top-6 right-6 flex gap-3 p-4 bg-black/85 border-b-4 border-yellow-500 rounded-xl ui-element' },
+                    slots.map((s, i) => {
+                        const inv = state.player.inventory[s]; const active = state.player.selectedSlot === s;
+                        return React.createElement('div', { key: s, className: `w-24 h-24 border-2 transition-all flex flex-col items-center justify-center ${active ? 'border-yellow-400 bg-yellow-400/25 scale-110 shadow-lg' : 'border-white/10 opacity-60'}` },
+                            React.createElement('div', { className: 'text-[10px] opacity-40' }, i+1),
+                            React.createElement('div', { className: 'text-[10px] font-bold text-center px-1' }, inv?.key || 'EMPTY'),
+                            React.createElement('div', { className: 'text-[13px] mt-1 text-yellow-500 font-bold' }, inv?.ammo ?? '')
+                        );
+                    })
+                ),
+                state.vehicle && React.createElement('div', { className: 'absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 ui-element' },
+                    React.createElement('div', { className: 'flex gap-4' },
+                        React.createElement('div', { className: 'bg-black/80 px-4 py-1 border-2 border-white rounded-lg text-xs' }, `MODE: ${state.player.transmission.toUpperCase()}`),
+                        React.createElement('div', { className: 'bg-black/80 px-4 py-1 border-2 border-yellow-500 rounded-lg text-xs text-yellow-400 font-bold' }, `GEAR: ${state.vehicle.gear}`)
+                    ),
+                    React.createElement('div', { className: 'bg-black/80 px-6 py-2 border-2 border-white rounded-xl text-3xl font-black italic flex items-baseline gap-2' },
+                        React.createElement('span', null, Math.floor(Math.abs(state.vehicle.speed) * 32)),
+                        React.createElement('span', { className: 'text-xs opacity-50' }, 'KM/H')
                     )
                 ),
-                // Vehicle Speed
-                state.vehicle && React.createElement('div', { className: 'absolute bottom-10 left-1/2 -translate-x-1/2 ui-element bg-black/80 p-4 border-t-4 border-white text-center' },
-                    React.createElement('div', { className: 'text-yellow-400 text-2xl font-black' }, state.vehicle.gear === -1 ? 'R' : state.vehicle.gear),
-                    React.createElement('div', { className: 'text-5xl font-black' }, `${Math.floor(Math.abs(state.vehicle.speed) * 28)} KM/H`)
+                React.createElement('div', { className: 'absolute bottom-6 left-6 text-[10px] opacity-40 ui-element flex flex-col gap-1' },
+                    React.createElement('span', null, 'WASD: MOVE | F: EXIT | Q: TRANSMISSION'),
+                    React.createElement('span', null, 'E: SHIFT UP (MANUAL) | SPACE: ROLL')
                 ),
-                // Controls Help
-                React.createElement('div', { className: 'absolute bottom-6 left-6 text-[11px] opacity-40 bg-black/50 p-2 border-l-2 border-white/30 ui-element' },
-                    '1-4: 무기 | WASD: 이동 | F: 하차 | Space: 구르기 | R-CLICK: 조준(충전) | L-CLICK: 공격(투척)'
-                ),
-                // Death Screen
-                state.player.health <= 0 && React.createElement('div', { className: 'absolute inset-0 bg-red-950/90 flex flex-col items-center justify-center z-50 animate-fade-in' },
-                    React.createElement('h1', { className: 'text-9xl font-black mb-12 skew-x-[-15deg]' }, 'WASTED'),
-                    React.createElement('button', { className: 'px-16 py-4 bg-white text-red-950 font-black text-2xl hover:scale-105 pointer-events-auto', onClick: () => setGameKey(k => k+1) }, 'RESPAWN')
+                state.player.health <= 0 && React.createElement('div', { className: 'absolute inset-0 bg-red-950/95 flex flex-col items-center justify-center z-50 animate-fade-in' },
+                    React.createElement('h1', { className: 'text-9xl font-black mb-12 skew-x-[-18deg] tracking-tighter' }, 'WASTED'),
+                    React.createElement('button', { className: 'px-24 py-6 bg-white text-red-950 font-black text-3xl hover:bg-gray-200 transition-all pointer-events-auto', onClick: () => setGameKey(k => k+1) }, 'RESPAWN')
                 )
             );
         };
