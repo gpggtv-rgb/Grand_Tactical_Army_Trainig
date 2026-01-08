@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GTA 1999: NEON STREETS</title>
+    <title>Grand Tactical Army Training</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; font-family: 'Courier New', Courier, monospace; }
@@ -14,14 +14,13 @@
         .animate-fade-in { animation: fade-in 0.8s ease-out forwards; }
     </style>
     <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/client": "https://esm.sh/react-dom@^19.2.3/client",
-    "react/": "https://esm.sh/react@^19.2.3/"
-  }
-}
-</script>
+    {
+      "imports": {
+        "react": "https://esm.sh/react@^19.2.3",
+        "react-dom/client": "https://esm.sh/react-dom@^19.2.3/client"
+      }
+    }
+    </script>
 </head>
 <body>
     <div id="root"></div>
@@ -29,43 +28,51 @@
         import React, { useState, useRef, useEffect } from 'react';
         import { createRoot } from 'react-dom/client';
 
-        const TILE_SIZE = 160; // 도로 넓힘
+        // --- Constants & Config ---
+        const TILE_SIZE = 200; 
         const CITY_SIZE = 40;
-        const FRICTION = 0.94;
+        const FRICTION = 0.92;
         const DRAG = 0.98;
-        const VEHICLE_ACCEL_BASE = 0.5;
-        const VEHICLE_TURN_SPEED = 0.08;
-        const PLAYER_RUN_SPEED = 4.8;
-        const PLAYER_WALK_SPEED = 2.0;
-        const ROLL_SPEED = 8.5;
-        const STAMINA_REGEN = 0.3;
-        const STAMINA_RUN_COST = 0.2;
-        const STAMINA_ROLL_COST = 30;
+        const PLAYER_RUN_SPEED = 5.2;
+        const PLAYER_WALK_SPEED = 2.4;
+        const ROLL_SPEED = 9.0;
+        const STAMINA_REGEN = 0.25;
+        const STAMINA_RUN_COST = 0.15;
 
         const COLORS = {
-            ROAD: '#1a1a1a', SIDEWALK: '#333', BUILDING: '#151525', BUILDING_TOP: '#1e1e35',
-            PLAYER: '#00ffcc', PED: '#ffffff', MIST: 'rgba(0, 0, 0, 0.92)', FIRE: '#ff4400', WRECK: '#0a0a0a'
+            ROAD: '#1a1a1a', SIDEWALK: '#333', BUILDING: '#121220', BUILDING_TOP: '#18182a',
+            PLAYER: '#00ffcc', PED: '#ffffff', MIST: 'rgba(0, 0, 0, 0.93)', WRECK: '#0a0a0a'
         };
 
-        const WeaponType = { FIST: 'FIST', PISTOL: 'PISTOL', UZI: 'UZI', GRENADE: 'GRENADE' };
-        const WEAPONS = {
-            [WeaponType.FIST]: { range: 60, damage: 20, cooldown: 15, zoomFactor: 1.1 },
-            [WeaponType.PISTOL]: { range: 600, damage: 30, cooldown: 20, zoomFactor: 1.6 },
-            [WeaponType.UZI]: { range: 800, damage: 15, cooldown: 6, zoomFactor: 2.0 },
-            [WeaponType.GRENADE]: { range: 500, damage: 150, cooldown: 80, zoomFactor: 1.4 }
+        const WeaponTypes = {
+            MELEE: 'MELEE',
+            PISTOL: 'PISTOL',
+            RIFLE: 'RIFLE',
+            THROWABLE: 'THROWABLE'
         };
 
-        const generateMap = () => {
-            const grid = [];
-            for (let y = 0; y < CITY_SIZE; y++) {
-                grid[y] = [];
-                for (let x = 0; x < CITY_SIZE; x++) {
-                    if (x % 8 === 0 || y % 8 === 0) grid[y][x] = 1; // 2차선급 도로
-                    else if (x % 8 === 1 || x % 8 === 7 || y % 8 === 1 || y % 8 === 7) grid[y][x] = 2; // 인도
-                    else grid[y][x] = 3; // 건물
-                }
+        const WEAPON_DATA = {
+            [WeaponTypes.MELEE]: {
+                FIST: { name: 'FIST', damage: 20, cooldown: 15, range: 60, durability: Infinity },
+                BAT: { name: 'BASEBALL BAT', damage: 45, cooldown: 25, range: 85, durability: 30 },
+                DAGGER: { name: 'DAGGER', damage: 60, cooldown: 12, range: 65, durability: 20 },
+                KATANA: { name: 'KATANA', damage: 100, cooldown: 18, range: 110, durability: 50 }
+            },
+            [WeaponTypes.PISTOL]: {
+                GLOCK: { name: 'GLOCK', damage: 30, cooldown: 18, ammo: 15, maxAmmo: 120 },
+                DEAGLE: { name: 'D-EAGLE', damage: 75, cooldown: 35, ammo: 7, maxAmmo: 50 },
+                MAGNUM: { name: '44 MAGNUM', damage: 90, cooldown: 45, ammo: 6, maxAmmo: 30 }
+            },
+            [WeaponTypes.RIFLE]: {
+                UZI: { name: 'UZI', damage: 12, cooldown: 5, ammo: 30, maxAmmo: 300 },
+                AK47: { name: 'AK-47', damage: 25, cooldown: 8, ammo: 30, maxAmmo: 210 },
+                M249: { name: 'M249 SAW', damage: 22, cooldown: 4, ammo: 100, maxAmmo: 500 }
+            },
+            [WeaponTypes.THROWABLE]: {
+                GRENADE: { name: 'GRENADE', damage: 180, cooldown: 80, radius: 150 },
+                MOLOTOV: { name: 'MOLOTOV', damage: 15, cooldown: 60, radius: 120, burn: true },
+                FLASH: { name: 'FLASHBANG', damage: 0, cooldown: 50, radius: 200 }
             }
-            return grid;
         };
 
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -81,11 +88,36 @@
             } catch(e) {}
         };
 
+        const generateMap = () => {
+            const grid = [];
+            for (let y = 0; y < CITY_SIZE; y++) {
+                grid[y] = [];
+                for (let x = 0; x < CITY_SIZE; x++) {
+                    if (x % 6 === 0 || y % 6 === 0) grid[y][x] = 1; // Road
+                    else if (x % 6 === 1 || x % 6 === 5 || y % 6 === 1 || y % 6 === 5) grid[y][x] = 2; // Sidewalk
+                    else grid[y][x] = 3; // Building
+                }
+            }
+            return grid;
+        };
+
+        // --- Game Canvas Component ---
         const GameCanvas = ({ onUpdate, gameKey }) => {
             const canvasRef = useRef(null);
             const engine = useRef({
-                player: { pos: { x: TILE_SIZE * 8.5, y: TILE_SIZE * 8.5 }, angle: 0, health: 100, stamina: 100, weapon: WeaponType.FIST, vehicleId: null, radius: 18, aimProg: 0, lastShot: 0, state: 'idle', rollTimer: 0, swingTimer: 0, swingSide: 1 },
-                vehicles: [], peds: [], projectiles: [], particles: [],
+                player: {
+                    pos: { x: TILE_SIZE * 6.5, y: TILE_SIZE * 6.5 }, angle: 0, health: 100, stamina: 100,
+                    inventory: {
+                        [WeaponTypes.MELEE]: { key: 'FIST', durability: Infinity },
+                        [WeaponTypes.PISTOL]: { key: 'GLOCK', ammo: 15 },
+                        [WeaponTypes.RIFLE]: { key: 'AK47', ammo: 30 },
+                        [WeaponTypes.THROWABLE]: { key: 'GRENADE', ammo: 5 }
+                    },
+                    selectedSlot: WeaponTypes.MELEE,
+                    vehicleId: null, radius: 20, state: 'idle', rollAngle: 0, rollTimer: 0,
+                    throwCharge: 0, throwCanceled: false, lastShot: 0
+                },
+                vehicles: [], peds: [], projectiles: [], particles: [], explosions: [],
                 map: generateMap(), keys: {}, mouse: { x: 0, y: 0, left: false, right: false },
                 camera: { zoom: 1.0 }, score: 0, lastTime: performance.now(), lightCycle: 0
             });
@@ -93,25 +125,37 @@
             useEffect(() => {
                 const eng = engine.current;
                 eng.vehicles = []; eng.peds = [];
-                for (let i = 0; i < 50; i++) {
+                
+                // Spawn Vehicles on roads with direction
+                for (let i = 0; i < 40; i++) {
+                    const roadX = Math.floor(Math.random() * 6) * 6;
+                    const roadY = Math.floor(Math.random() * CITY_SIZE);
                     eng.vehicles.push({
-                        id: `v-${i}`, pos: { x: (Math.floor(Math.random() * 5) * 8 + 0.5) * TILE_SIZE, y: Math.random() * CITY_SIZE * TILE_SIZE },
-                        angle: Math.random() < 0.5 ? 0 : Math.PI, speed: 0, health: 100, gear: 1, color: `hsl(${Math.random() * 360}, 60%, 40%)`,
-                        radius: 52, driver: i < 15 ? 'npc' : null, isWreck: false, burnTime: 0, crumpleOffsets: Array(4).fill(0).map(() => ({ x: 0, y: 0 }))
+                        id: `v-${i}`, pos: { x: roadX * TILE_SIZE + TILE_SIZE/2, y: roadY * TILE_SIZE },
+                        angle: Math.PI / 2, speed: 2 + Math.random() * 2, health: 100, gear: 1, 
+                        color: `hsl(${Math.random() * 360}, 50%, 40%)`, radius: 55, driver: 'npc', isWreck: false,
+                        targetLane: roadX, turnCooldown: 0
                     });
                 }
-                for (let i = 0; i < 80; i++) {
-                    eng.peds.push({ id: `p-${i}`, pos: { x: Math.random() * CITY_SIZE * TILE_SIZE, y: Math.random() * CITY_SIZE * TILE_SIZE }, angle: Math.random() * Math.PI * 2, health: 100, radius: 18, walkTimer: Math.random() * 200 });
+                // Spawn NPCs
+                for (let i = 0; i < 60; i++) {
+                    eng.peds.push({ 
+                        id: `p-${i}`, pos: { x: Math.random() * CITY_SIZE * TILE_SIZE, y: Math.random() * CITY_SIZE * TILE_SIZE }, 
+                        angle: Math.random() * Math.PI * 2, health: 100, radius: 18, walkTimer: Math.random() * 200,
+                        type: Math.random() > 0.8 ? 'cop' : 'civilian'
+                    });
                 }
 
                 const handleKey = (e, down) => {
                     eng.keys[e.code] = down;
                     if (down) {
+                        if (e.code === 'Digit1') eng.player.selectedSlot = WeaponTypes.MELEE;
+                        if (e.code === 'Digit2') eng.player.selectedSlot = WeaponTypes.PISTOL;
+                        if (e.code === 'Digit3') eng.player.selectedSlot = WeaponTypes.RIFLE;
+                        if (e.code === 'Digit4') eng.player.selectedSlot = WeaponTypes.THROWABLE;
                         if (e.code === 'KeyF') toggleVehicle();
                         if (e.code === 'KeyE' && eng.player.vehicleId) shiftGear();
-                        if (e.code === 'Space' && !eng.player.vehicleId && eng.player.stamina > STAMINA_ROLL_COST && eng.player.state !== 'rolling') performRoll();
-                        const wMap = { Digit1: WeaponType.FIST, Digit2: WeaponType.PISTOL, Digit3: WeaponType.UZI, Digit4: WeaponType.GRENADE };
-                        if (wMap[e.code]) eng.player.weapon = wMap[e.code];
+                        if (e.code === 'ShiftLeft') if (eng.player.state === 'charging') eng.player.throwCanceled = true;
                     }
                 };
                 window.addEventListener('keydown', (e) => handleKey(e, true));
@@ -125,39 +169,32 @@
                 return () => cancelAnimationFrame(frame);
             }, [gameKey]);
 
-            const performRoll = () => {
-                const eng = engine.current;
-                eng.player.stamina -= STAMINA_ROLL_COST;
-                eng.player.state = 'rolling';
-                eng.player.rollTimer = 25;
-                playSfx(150, 'sine', 0.2, 0.1);
-            };
-
             const shiftGear = () => {
                 const eng = engine.current;
                 const v = eng.vehicles.find(v => v.id === eng.player.vehicleId);
                 if (v && !v.isWreck) {
                     const gears = [-1, 1, 2, 3, 4];
                     v.gear = gears[(gears.indexOf(v.gear) + 1) % gears.length];
-                    playSfx(300 + v.gear * 50, 'triangle', 0.1, 0.05);
+                    playSfx(250 + v.gear * 40, 'triangle', 0.1, 0.05);
                 }
             };
 
             const toggleVehicle = () => {
                 const eng = engine.current;
-                if (eng.player.vehicleId) {
-                    const v = eng.vehicles.find(v => v.id === eng.player.vehicleId);
-                    if (v) { eng.player.vehicleId = null; v.driver = null; eng.player.pos.x += Math.cos(v.angle + Math.PI/2) * 100; eng.player.pos.y += Math.sin(v.angle + Math.PI/2) * 100; }
+                const p = eng.player;
+                if (p.vehicleId) {
+                    const v = eng.vehicles.find(v => v.id === p.vehicleId);
+                    if (v) { p.vehicleId = null; v.driver = 'npc'; p.pos.x += Math.cos(v.angle + Math.PI/2) * 110; p.pos.y += Math.sin(v.angle + Math.PI/2) * 110; }
                 } else {
-                    const v = eng.vehicles.find(v => !v.isWreck && Math.hypot(v.pos.x - eng.player.pos.x, v.pos.y - eng.player.pos.y) < 110);
-                    if (v) { eng.player.vehicleId = v.id; v.driver = 'player'; }
+                    const v = eng.vehicles.find(v => !v.isWreck && Math.hypot(v.pos.x - p.pos.x, v.pos.y - p.pos.y) < 120);
+                    if (v) { p.vehicleId = v.id; v.driver = 'player'; v.speed = 0; }
                 }
             };
 
             const loop = (time) => {
                 const dt = Math.min(2.0, (time - engine.current.lastTime) / 16.67);
                 engine.current.lastTime = time;
-                engine.current.lightCycle = (engine.current.lightCycle + dt) % 600;
+                engine.current.lightCycle = (engine.current.lightCycle + dt) % 800;
                 for (let i = 0; i < 4; i++) updatePhysics(dt / 4);
                 render();
                 requestAnimationFrame(loop);
@@ -168,68 +205,91 @@
                 const p = eng.player;
                 if (p.health <= 0) return;
 
-                p.isAiming = eng.mouse.right && !p.vehicleId;
-                p.aimProg += (p.isAiming ? 1 - p.aimProg : -p.aimProg) * 0.1 * dt;
-
-                if (p.vehicleId) {
-                    const v = eng.vehicles.find(v => v.id === p.vehicleId);
-                    if (v && !v.isWreck) {
-                        const gearT = [0, 1.4, 0.9, 0.6, 0.4]; const gearM = [0, 5, 9, 13, 18];
+                const isAiming = eng.mouse.right && !p.vehicleId;
+                
+                // Vehicle Handling & Traffic Logic
+                eng.vehicles.forEach(v => {
+                    if (v.isWreck) return;
+                    if (v.driver === 'player') {
+                        // Player Drive
+                        const gearT = [0, 1.3, 0.9, 0.6, 0.4];
+                        const gearM = [0, 6, 11, 16, 22];
                         if (v.gear === -1) {
-                            if (eng.keys['KeyW']) v.speed -= 0.2 * dt; if (eng.keys['KeyS']) v.speed += 0.1 * dt;
-                            v.speed = Math.max(-5, v.speed);
+                            if (eng.keys['KeyW']) v.speed -= 0.15 * dt; if (eng.keys['KeyS']) v.speed += 0.08 * dt;
+                            v.speed = Math.max(-6, v.speed);
                         } else {
-                            if (eng.keys['KeyW']) v.speed += VEHICLE_ACCEL_BASE * gearT[v.gear] * dt;
+                            if (eng.keys['KeyW']) v.speed += 0.35 * gearT[v.gear] * dt;
                             if (eng.keys['KeyS']) v.speed -= 0.6 * dt;
                             v.speed = Math.min(gearM[v.gear], v.speed);
                         }
-                        const turnMult = Math.min(1, Math.abs(v.speed) / 4);
-                        if (eng.keys['KeyA']) v.angle -= VEHICLE_TURN_SPEED * turnMult * dt;
-                        if (eng.keys['KeyD']) v.angle += VEHICLE_TURN_SPEED * turnMult * dt;
+                        const turnFac = Math.min(1, Math.abs(v.speed) / 5);
+                        if (eng.keys['KeyA']) v.angle -= 0.08 * turnFac * dt;
+                        if (eng.keys['KeyD']) v.angle += 0.08 * turnFac * dt;
                         v.speed *= Math.pow(DRAG, dt);
                         v.pos.x += Math.cos(v.angle) * v.speed * dt; v.pos.y += Math.sin(v.angle) * v.speed * dt;
                         p.pos = { ...v.pos }; p.angle = v.angle;
-                        checkWall(v);
+                    } else {
+                        // NPC Traffic Logic (GTA2 Algorithm)
+                        const tx = Math.floor(v.pos.x / TILE_SIZE);
+                        const ty = Math.floor(v.pos.y / TILE_SIZE);
+                        const isRed = (eng.lightCycle < 350) && (tx % 6 === 0 || ty % 6 === 0);
+                        
+                        // Stop at intersection if red
+                        let stop = isRed && (Math.hypot(v.pos.x % TILE_SIZE - TILE_SIZE/2, v.pos.y % TILE_SIZE - TILE_SIZE/2) < 60);
+                        if (!stop) v.pos.x += Math.cos(v.angle) * v.speed * dt; v.pos.y += Math.sin(v.angle) * v.speed * dt;
+
+                        // Lane Keeping & Intersection Turning
+                        if (v.turnCooldown > 0) v.turnCooldown -= dt;
+                        if (v.turnCooldown <= 0 && tx % 6 === 0 && ty % 6 === 0) {
+                            if (Math.random() < 0.1) {
+                                v.angle += (Math.random() > 0.5 ? 1 : -1) * Math.PI / 2;
+                                v.turnCooldown = 50;
+                            }
+                        }
                     }
-                } else if (p.state === 'rolling') {
-                    p.pos.x += Math.cos(p.angle) * ROLL_SPEED * dt;
-                    p.pos.y += Math.sin(p.angle) * ROLL_SPEED * dt;
-                    p.rollTimer -= dt;
-                    if (p.rollTimer <= 0) p.state = 'idle';
-                    checkWall(p);
-                } else {
-                    const isWalking = eng.keys['ShiftLeft'];
-                    const speed = isWalking ? PLAYER_WALK_SPEED : PLAYER_RUN_SPEED;
-                    let mx = 0, my = 0;
-                    if (eng.keys['KeyW']) my -= 1; if (eng.keys['KeyS']) my += 1;
-                    if (eng.keys['KeyA']) mx -= 1; if (eng.keys['KeyD']) mx += 1;
-                    if (mx !== 0 || my !== 0) {
-                        const ang = Math.atan2(my, mx);
-                        p.pos.x += Math.cos(ang) * speed * dt; p.pos.y += Math.sin(ang) * speed * dt;
-                        if (!p.isAiming) p.angle = ang;
-                        if (!isWalking) { 
-                            p.stamina = Math.max(0, p.stamina - STAMINA_RUN_COST * dt); 
-                            if (Math.random() < 0.1) playSfx(60, 'sine', 0.05, 0.005);
+                    checkWall(v);
+                });
+
+                // Player Movement
+                if (!p.vehicleId) {
+                    if (p.state === 'rolling') {
+                        p.pos.x += Math.cos(p.angle) * ROLL_SPEED * dt; p.pos.y += Math.sin(p.angle) * ROLL_SPEED * dt;
+                        p.rollAngle += 0.3 * dt; p.rollTimer -= dt;
+                        if (p.rollTimer <= 0) { p.state = 'idle'; p.rollAngle = 0; }
+                    } else if (p.state === 'charging') {
+                        p.throwCharge = Math.min(3.5, p.throwCharge + 0.05 * dt);
+                        if (!eng.keys['Space']) {
+                            if (!p.throwCanceled) throwObject(p);
+                            p.state = 'idle'; p.throwCharge = 0; p.throwCanceled = false;
+                        }
+                    } else {
+                        const isWalking = eng.keys['ShiftLeft'] || isAiming;
+                        const speed = isWalking ? PLAYER_WALK_SPEED : PLAYER_RUN_SPEED;
+                        let mx = 0, my = 0;
+                        if (eng.keys['KeyW']) my -= 1; if (eng.keys['KeyS']) my += 1;
+                        if (eng.keys['KeyA']) mx -= 1; if (eng.keys['KeyD']) mx += 1;
+                        if (mx !== 0 || my !== 0) {
+                            const ang = Math.atan2(my, mx);
+                            p.pos.x += Math.cos(ang) * speed * dt; p.pos.y += Math.sin(ang) * speed * dt;
+                            if (!isAiming) p.angle = ang;
+                            if (!isWalking) p.stamina = Math.max(0, p.stamina - STAMINA_RUN_COST * dt);
                         } else {
                             p.stamina = Math.min(100, p.stamina + STAMINA_REGEN * dt);
                         }
-                    } else {
-                        p.stamina = Math.min(100, p.stamina + STAMINA_REGEN * dt);
+                        if (eng.keys['Space'] && p.stamina > 30) performRoll(p);
+                        if (p.selectedSlot === WeaponTypes.THROWABLE && eng.keys['Space']) {
+                            p.state = 'charging'; p.throwCharge = 0.5; p.throwCanceled = false;
+                        }
+                        if (eng.mouse.left) fireWeapon(p);
                     }
-                    if (p.isAiming) { const c = canvasRef.current; if (c) p.angle = Math.atan2(eng.mouse.y - c.height/2, eng.mouse.x - c.width/2); }
-                    if (eng.mouse.left) fireWeapon(p);
-                    if (p.swingTimer > 0) p.swingTimer -= dt;
+                    if (isAiming) {
+                        const c = canvasRef.current;
+                        if (c) p.angle = Math.atan2(eng.mouse.y - c.height/2, eng.mouse.x - c.width/2);
+                    }
                     checkWall(p);
                 }
 
-                // NPC AI & Collisions
-                eng.peds.forEach(npc => {
-                    npc.walkTimer -= dt;
-                    if (npc.walkTimer <= 0) { npc.angle = Math.random() * Math.PI * 2; npc.walkTimer = 150 + Math.random() * 300; }
-                    npc.pos.x += Math.cos(npc.angle) * 1.8 * dt; npc.pos.y += Math.sin(npc.angle) * 1.8 * dt;
-                    checkWall(npc);
-                });
-
+                // Projectiles & Explosions
                 eng.projectiles = eng.projectiles.filter(pr => {
                     pr.pos.x += pr.vel.x * dt; pr.pos.y += pr.vel.y * dt; pr.life -= dt;
                     let hit = false;
@@ -237,64 +297,97 @@
                         if (target.id === pr.owner || target.health <= 0) return;
                         if (Math.hypot(target.pos.x - pr.pos.x, target.pos.y - pr.pos.y) < target.radius + pr.radius) {
                             target.health -= pr.damage; hit = true;
-                            if (target.health <= 0) for(let i=0; i<6; i++) eng.particles.push({ pos: { ...target.pos }, vel: { x: (Math.random()-0.5)*5, y: (Math.random()-0.5)*5 }, color: 'red', life: 30, size: 3 });
+                            if (target.health <= 0) eng.score += 50;
                         }
-                    });
-                    eng.vehicles.forEach(v => {
-                        if (v.isWreck || Math.hypot(v.pos.x - pr.pos.x, v.pos.y - pr.pos.y) > v.radius) return;
-                        v.health -= pr.damage; hit = true; applyCrumple(v);
-                        if (v.health <= 0) destroyVehicle(v);
                     });
                     return !hit && pr.life > 0;
                 });
 
-                resolveCollisions(dt);
-                eng.particles.forEach(pa => { pa.pos.x += pa.vel.x * dt; pa.pos.y += pa.vel.y * dt; pa.life -= dt; });
-                eng.particles = eng.particles.filter(pa => pa.life > 0);
-                eng.peds = eng.peds.filter(npc => npc.health > 0);
+                eng.explosions = eng.explosions.filter(ex => {
+                    ex.life -= dt;
+                    if (ex.life > 28) {
+                        [...eng.peds, p].forEach(target => {
+                            const d = Math.hypot(target.pos.x - ex.pos.x, target.pos.y - ex.pos.y);
+                            if (d < ex.radius) target.health -= (ex.damage * (1 - d/ex.radius)) * dt;
+                        });
+                    }
+                    return ex.life > 0;
+                });
 
+                // NPC Logic
+                eng.peds.forEach(npc => {
+                    npc.walkTimer -= dt;
+                    if (npc.walkTimer <= 0) { npc.angle = Math.random() * Math.PI * 2; npc.walkTimer = 100 + Math.random() * 200; }
+                    npc.pos.x += Math.cos(npc.angle) * 2.0 * dt; npc.pos.y += Math.sin(npc.angle) * 2.0 * dt;
+                    checkWall(npc);
+                });
+
+                resolveCollisions(dt);
                 onUpdate({ player: p, score: eng.score, vehicle: eng.vehicles.find(v => v.id === p.vehicleId) });
+            };
+
+            const performRoll = (p) => {
+                p.state = 'rolling'; p.rollTimer = 25; p.stamina -= 30;
+                playSfx(150, 'sine', 0.2, 0.1);
+            };
+
+            const throwObject = (p) => {
+                const eng = engine.current;
+                const slot = p.inventory[WeaponTypes.THROWABLE];
+                const config = WEAPON_DATA[WeaponTypes.THROWABLE][slot.key];
+                if (slot.ammo <= 0) return;
+                slot.ammo--;
+                eng.projectiles.push({
+                    pos: { ...p.pos }, vel: { x: Math.cos(p.angle) * 15, y: Math.sin(p.angle) * 15 },
+                    owner: 'player', life: (p.throwCharge * TILE_SIZE) / 15, radius: 8, damage: 0,
+                    isBomb: true, bombConfig: config
+                });
+                playSfx(200, 'square', 0.1, 0.1);
             };
 
             const fireWeapon = (p) => {
                 const eng = engine.current;
-                const config = WEAPONS[p.weapon];
+                const slot = p.inventory[p.selectedSlot];
+                if (!slot) return;
+                const config = WEAPON_DATA[p.selectedSlot][slot.key];
                 if (Date.now() - p.lastShot < config.cooldown * 16) return;
                 p.lastShot = Date.now();
 
-                if (p.weapon === WeaponType.FIST) {
-                    p.swingTimer = 10; p.swingSide *= -1;
-                    playSfx(200, 'square', 0.1, 0.1);
-                    eng.peds.forEach(target => {
-                        const dist = Math.hypot(target.pos.x - p.pos.x, target.pos.y - p.pos.y);
-                        const ang = Math.atan2(target.pos.y - p.pos.y, target.pos.x - p.pos.x);
-                        const diff = Math.abs(((ang - p.angle + Math.PI*3) % (Math.PI*2)) - Math.PI);
-                        if (dist < 80 && diff < 1.2) {
-                            target.health -= config.damage;
-                            if (target.health <= 0) for(let i=0; i<6; i++) eng.particles.push({ pos: { ...target.pos }, vel: { x: (Math.random()-0.5)*5, y: (Math.random()-0.5)*5 }, color: 'red', life: 30, size: 3 });
-                        }
+                if (p.selectedSlot === WeaponTypes.MELEE) {
+                    playSfx(100, 'sawtooth', 0.1, 0.1);
+                    eng.peds.forEach(npc => {
+                        const d = Math.hypot(npc.pos.x - p.pos.x, npc.pos.y - p.pos.y);
+                        if (d < config.range) npc.health -= config.damage;
                     });
-                } else {
-                    playSfx(600, 'sawtooth', 0.1, 0.1);
-                    eng.projectiles.push({ pos: { ...p.pos }, vel: { x: Math.cos(p.angle) * 30, y: Math.sin(p.angle) * 30 }, owner: 'player', life: config.range / 30, radius: 4, damage: config.damage });
+                    if (config.durability !== Infinity) {
+                        slot.durability--;
+                        if (slot.durability <= 0) slot.key = 'FIST';
+                    }
+                } else if (p.selectedSlot === WeaponTypes.PISTOL || p.selectedSlot === WeaponTypes.RIFLE) {
+                    if (slot.ammo <= 0) return;
+                    slot.ammo--;
+                    playSfx(500, 'sawtooth', 0.05, 0.1);
+                    eng.projectiles.push({
+                        pos: { ...p.pos }, vel: { x: Math.cos(p.angle) * 30, y: Math.sin(p.angle) * 30 },
+                        owner: 'player', life: 25, radius: 4, damage: config.damage
+                    });
                 }
             };
 
             const checkWall = (ent) => {
-                const eng = engine.current;
+                const { map } = engine.current;
                 const tx = Math.floor(ent.pos.x / TILE_SIZE), ty = Math.floor(ent.pos.y / TILE_SIZE);
                 for (let y = ty-1; y <= ty+1; y++) {
                     for (let x = tx-1; x <= tx+1; x++) {
-                        if (eng.map[y]?.[x] === 3) {
+                        if (map[y]?.[x] === 3) {
                             const bX = x * TILE_SIZE, bY = y * TILE_SIZE;
                             const cX = Math.max(bX, Math.min(ent.pos.x, bX + TILE_SIZE));
                             const cY = Math.max(bY, Math.min(ent.pos.y, bY + TILE_SIZE));
                             const dx = ent.pos.x - cX, dy = ent.pos.y - cY;
                             const d = Math.hypot(dx, dy);
                             if (d < ent.radius && d > 0) {
-                                ent.pos.x += (dx/d) * (ent.radius - d);
-                                ent.pos.y += (dy/d) * (ent.radius - d);
-                                if (ent.speed) { ent.health -= Math.abs(ent.speed) * 3; applyCrumple(ent); if (ent.health <= 0) destroyVehicle(ent); ent.speed *= -0.4; }
+                                ent.pos.x += (dx/d) * (ent.radius - d); ent.pos.y += (dy/d) * (ent.radius - d);
+                                if (ent.speed) ent.speed *= -0.3;
                             }
                         }
                     }
@@ -303,28 +396,22 @@
 
             const resolveCollisions = (dt) => {
                 const eng = engine.current;
-                const p = eng.player;
+                const all = [...eng.peds, eng.player];
                 eng.vehicles.forEach(v => {
-                    [...eng.peds, p].forEach(target => {
-                        if (target.id === 'player' && p.vehicleId === v.id) return;
-                        if (target.health <= 0) return;
-                        const d = Math.hypot(target.pos.x - v.pos.x, target.pos.y - v.pos.y);
-                        const minDist = v.radius + target.radius - 8;
-                        if (d < minDist) {
-                            const overlap = minDist - d;
-                            const nx = (target.pos.x - v.pos.x) / d, ny = (target.pos.y - v.pos.y) / d;
-                            target.pos.x += nx * overlap; target.pos.y += ny * overlap;
-                            if (Math.abs(v.speed) > 2.0) {
-                                target.health -= Math.abs(v.speed) * 20;
-                                if (target.health <= 0) for(let i=0; i<8; i++) eng.particles.push({ pos: { ...target.pos }, vel: { x: (Math.random()-0.5)*5, y: (Math.random()-0.5)*5 }, color: 'red', life: 30, size: 4 });
+                    all.forEach(p => {
+                        if (p.vehicleId === v.id) return;
+                        const d = Math.hypot(v.pos.x - p.pos.x, v.pos.y - p.pos.y);
+                        if (d < v.radius + p.radius) {
+                            if (Math.abs(v.speed) > 2) {
+                                p.health -= Math.abs(v.speed) * 15;
+                                if (p.health <= 0) eng.score += 20;
                             }
+                            const nx = (p.pos.x - v.pos.x)/d, ny = (p.pos.y - v.pos.y)/d;
+                            p.pos.x += nx * 10; p.pos.y += ny * 10;
                         }
                     });
                 });
             };
-
-            const applyCrumple = (v) => { v.crumpleOffsets = v.crumpleOffsets.map(o => ({ x: o.x + (Math.random()-0.5)*8, y: o.y + (Math.random()-0.5)*8 })); };
-            const destroyVehicle = (v) => { v.isWreck = true; v.speed = 0; v.burnTime = 160; playSfx(100, 'sawtooth', 0.6, 0.2); };
 
             const render = () => {
                 const canvas = canvasRef.current; if (!canvas) return;
@@ -333,133 +420,147 @@
                 canvas.width = window.innerWidth; canvas.height = window.innerHeight;
 
                 const currentV = eng.vehicles.find(v => v.id === p.vehicleId);
-                const targetZoom = p.vehicleId ? (0.55 - Math.abs(currentV?.speed || 0) * 0.02) : (0.9 - p.aimProg * 0.4);
-                eng.camera.zoom += (targetZoom - eng.camera.zoom) * 0.1;
+                const zoomT = p.vehicleId ? (0.6 - Math.abs(currentV?.speed || 0)*0.015) : (eng.mouse.right ? 0.6 : 0.9);
+                eng.camera.zoom += (zoomT - eng.camera.zoom) * 0.1;
 
-                ctx.fillStyle = '#0a0a1a'; ctx.fillRect(0,0, canvas.width, canvas.height);
+                ctx.fillStyle = '#050510'; ctx.fillRect(0,0, canvas.width, canvas.height);
                 ctx.save();
                 ctx.translate(canvas.width/2, canvas.height/2);
                 ctx.scale(eng.camera.zoom, eng.camera.zoom);
                 ctx.translate(-p.pos.x, -p.pos.y);
 
-                // 지도
+                // World
                 for (let y = 0; y < CITY_SIZE; y++) {
                     for (let x = 0; x < CITY_SIZE; x++) {
                         const t = eng.map[y][x]; const px = x * TILE_SIZE, py = y * TILE_SIZE;
                         if (t === 1) { 
                             ctx.fillStyle = COLORS.ROAD; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
-                            // 중앙선
-                            ctx.strokeStyle = 'rgba(255,255,0,0.5)'; ctx.setLineDash([20, 20]); ctx.lineWidth = 4;
-                            ctx.beginPath(); ctx.moveTo(px + TILE_SIZE/2, py); ctx.lineTo(px + TILE_SIZE/2, py + TILE_SIZE); ctx.stroke();
-                            ctx.beginPath(); ctx.moveTo(px, py + TILE_SIZE/2); ctx.lineTo(px + TILE_SIZE, py + TILE_SIZE/2); ctx.stroke();
+                            ctx.strokeStyle = '#444'; ctx.lineWidth = 4; ctx.setLineDash([20, 30]);
+                            ctx.beginPath(); ctx.moveTo(px+TILE_SIZE/2, py); ctx.lineTo(px+TILE_SIZE/2, py+TILE_SIZE); ctx.stroke();
+                            ctx.beginPath(); ctx.moveTo(px, py+TILE_SIZE/2); ctx.lineTo(px+TILE_SIZE, py+TILE_SIZE/2); ctx.stroke();
                             ctx.setLineDash([]);
-                        }
-                        else if (t === 2) { ctx.fillStyle = COLORS.SIDEWALK; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE); }
-                        else if (t === 3) { ctx.fillStyle = COLORS.BUILDING; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE); ctx.fillStyle = COLORS.BUILDING_TOP; ctx.fillRect(px+15, py+15, TILE_SIZE-30, TILE_SIZE-30); }
+                        } else if (t === 2) { ctx.fillStyle = COLORS.SIDEWALK; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE); }
+                        else if (t === 3) { ctx.fillStyle = COLORS.BUILDING; ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE); ctx.fillStyle = COLORS.BUILDING_TOP; ctx.fillRect(px+20, py+20, TILE_SIZE-40, TILE_SIZE-40); }
                     }
                 }
 
-                // 횡단보도 & 신호등
-                for (let y = 0; y < CITY_SIZE; y+=8) {
-                    for (let x = 0; x < CITY_SIZE; x+=8) {
+                // Traffic Signals & Crosswalks
+                for (let y = 0; y < CITY_SIZE; y+=6) {
+                    for (let x = 0; x < CITY_SIZE; x+=6) {
                         const px = x * TILE_SIZE, py = y * TILE_SIZE;
-                        ctx.fillStyle = 'rgba(255,255,255,0.4)';
-                        for(let i=0; i<5; i++) {
-                            ctx.fillRect(px + TILE_SIZE + i*25, py + TILE_SIZE + 10, 15, 60);
-                            ctx.fillRect(px + 10, py + TILE_SIZE + i*25 + TILE_SIZE, 60, 15);
-                        }
-                        // 신호등
-                        const lightCol = eng.lightCycle < 300 ? 'red' : 'green';
-                        ctx.fillStyle = '#222'; ctx.fillRect(px+TILE_SIZE-20, py+TILE_SIZE-20, 40, 40);
-                        ctx.fillStyle = lightCol; ctx.beginPath(); ctx.arc(px+TILE_SIZE, py+TILE_SIZE, 10, 0, Math.PI*2); ctx.fill();
+                        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                        ctx.fillRect(px+TILE_SIZE, py+TILE_SIZE+40, 60, 120);
+                        const lightCol = eng.lightCycle < 350 ? 'red' : 'green';
+                        ctx.fillStyle = '#000'; ctx.fillRect(px+TILE_SIZE-10, py+TILE_SIZE-10, 20, 20);
+                        ctx.fillStyle = lightCol; ctx.beginPath(); ctx.arc(px+TILE_SIZE, py+TILE_SIZE, 6, 0, Math.PI*2); ctx.fill();
                     }
                 }
 
-                // 차량
+                // Vehicles
                 eng.vehicles.forEach(v => {
                     ctx.save(); ctx.translate(v.pos.x, v.pos.y); ctx.rotate(v.angle);
-                    ctx.fillStyle = v.isWreck ? COLORS.WRECK : v.color;
-                    const w = 45, h = 26;
-                    ctx.beginPath(); ctx.moveTo(-w+v.crumpleOffsets[0].x, -h+v.crumpleOffsets[0].y); ctx.lineTo(w+v.crumpleOffsets[1].x, -h+v.crumpleOffsets[1].y); ctx.lineTo(w+v.crumpleOffsets[2].x, h+v.crumpleOffsets[2].y); ctx.lineTo(-w+v.crumpleOffsets[3].x, h+v.crumpleOffsets[3].y); ctx.closePath(); ctx.fill();
-                    if (!v.isWreck) { 
-                        ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(-15, -18, 45, 36); 
-                        // 라이트
-                        ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.shadowBlur = 15; ctx.shadowColor = 'white'; ctx.fillRect(40, -22, 10, 10); ctx.fillRect(40, 12, 10, 10); ctx.shadowBlur = 0;
-                    }
+                    ctx.fillStyle = v.color; ctx.fillRect(-45, -24, 90, 48);
+                    ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(40, -20, 8, 8); ctx.fillRect(40, 12, 8, 8);
                     ctx.restore();
                 });
 
-                // NPC & 플레이어
-                const renderChar = (c, isP) => {
-                    ctx.save(); ctx.translate(c.pos.x, c.pos.y); ctx.rotate(c.angle);
+                // Characters
+                const drawChar = (c, isP) => {
+                    if (isP && c.vehicleId) return;
+                    ctx.save(); ctx.translate(c.pos.x, c.pos.y);
+                    if (isP && c.state === 'rolling') ctx.rotate(c.rollAngle); else ctx.rotate(c.angle);
                     ctx.fillStyle = isP ? COLORS.PLAYER : COLORS.PED;
                     ctx.beginPath(); ctx.arc(0,0, c.radius, 0, Math.PI*2); ctx.fill();
-                    // 방향 지시
-                    ctx.fillStyle = 'black'; ctx.fillRect(12, -3, 8, 6);
-                    // 주먹 휘두르기 애니메이션
-                    if (isP && c.swingTimer > 0) {
-                        ctx.fillStyle = COLORS.PLAYER;
-                        const offset = Math.sin(c.swingTimer * 0.5) * 20;
-                        ctx.beginPath(); ctx.arc(15 + offset, 12 * c.swingSide, 8, 0, Math.PI*2); ctx.fill();
-                    } else if (isP) {
-                        ctx.fillStyle = COLORS.PLAYER;
-                        ctx.beginPath(); ctx.arc(12, 12, 6, 0, Math.PI*2); ctx.fill();
-                        ctx.beginPath(); ctx.arc(12, -12, 6, 0, Math.PI*2); ctx.fill();
-                    }
+                    ctx.fillStyle = 'black'; ctx.fillRect(12, -4, 8, 8); // Direction Indicator
                     ctx.restore();
                 };
-                eng.peds.forEach(ped => renderChar(ped, false));
-                if (!p.vehicleId) renderChar(p, true);
+                eng.peds.forEach(ped => drawChar(ped, false));
+                drawChar(p, true);
 
-                eng.projectiles.forEach(pr => { ctx.fillStyle = '#ff0'; ctx.shadowBlur = 12; ctx.shadowColor = '#ff0'; ctx.beginPath(); ctx.arc(pr.pos.x, pr.pos.y, pr.radius, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0; });
-                eng.particles.forEach(pa => { ctx.fillStyle = pa.color; ctx.globalAlpha = pa.life/30; ctx.beginPath(); ctx.arc(pa.pos.x, pa.pos.y, pa.size, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1; });
+                // Projectiles
+                eng.projectiles.forEach(pr => {
+                    ctx.fillStyle = '#ff0'; ctx.beginPath(); ctx.arc(pr.pos.x, pr.pos.y, pr.radius, 0, Math.PI*2); ctx.fill();
+                    if (pr.life <= dt && pr.isBomb) {
+                        eng.explosions.push({ pos: { ...pr.pos }, life: 30, radius: pr.bombConfig.radius, damage: pr.bombConfig.damage });
+                        playSfx(100, 'sawtooth', 0.5, 0.2);
+                    }
+                });
+
+                // Explosions
+                eng.explosions.forEach(ex => {
+                    const r = ex.radius * (1 - ex.life/30);
+                    ctx.fillStyle = `rgba(255, 100, 0, ${ex.life/30})`;
+                    ctx.beginPath(); ctx.arc(ex.pos.x, ex.pos.y, r, 0, Math.PI*2); ctx.fill();
+                });
+
+                // Throw Charge Line
+                if (p.state === 'charging' && !p.throwCanceled) {
+                    ctx.strokeStyle = '#fff'; ctx.setLineDash([5, 5]); ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.moveTo(p.pos.x, p.pos.y);
+                    ctx.lineTo(p.pos.x + Math.cos(p.angle) * p.throwCharge * TILE_SIZE, p.pos.y + Math.sin(p.angle) * p.throwCharge * TILE_SIZE);
+                    ctx.stroke(); ctx.setLineDash([]);
+                }
 
                 ctx.restore();
 
-                // 안개 마스크 (조준 시 살짝 밝게)
-                const vision = (p.isAiming ? 1000 : (p.vehicleId ? 600 : 400)) / eng.camera.zoom;
-                const alpha = p.isAiming ? 0.75 : 0.94;
+                // UI Fog
+                const vision = (eng.mouse.right ? 1000 : (p.vehicleId ? 700 : 450)) / eng.camera.zoom;
                 const grad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, vision*0.3, canvas.width/2, canvas.height/2, vision*1.8);
-                grad.addColorStop(0, 'transparent'); grad.addColorStop(1, `rgba(0,0,0,${alpha})`);
+                grad.addColorStop(0, 'transparent'); grad.addColorStop(1, COLORS.MIST);
                 ctx.fillStyle = grad; ctx.fillRect(0,0, canvas.width, canvas.height);
-
-                if (p.isAiming) {
-                    ctx.strokeStyle = '#00ff66'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(eng.mouse.x, eng.mouse.y, 25, 0, Math.PI*2);
-                    ctx.moveTo(eng.mouse.x - 40, eng.mouse.y); ctx.lineTo(eng.mouse.x + 40, eng.mouse.y);
-                    ctx.moveTo(eng.mouse.x, eng.mouse.y - 40); ctx.lineTo(eng.mouse.x, eng.mouse.y + 40); ctx.stroke();
-                }
             };
             return React.createElement('canvas', { ref: canvasRef, className: 'cursor-none' });
         };
 
         const App = () => {
             const [gameKey, setGameKey] = useState(0);
-            const [state, setState] = useState({ player: { health: 100, stamina: 100, weapon: WeaponType.FIST }, score: 0, vehicle: null });
-            const weapons = [WeaponType.FIST, WeaponType.PISTOL, WeaponType.UZI, WeaponType.GRENADE];
+            const [state, setState] = useState({ player: { health: 100, stamina: 100, inventory: {}, selectedSlot: WeaponTypes.MELEE }, score: 0, vehicle: null });
+
+            const getSlotInfo = () => {
+                const p = state.player;
+                const slot = p.inventory[p.selectedSlot];
+                if (!slot) return '';
+                const config = WEAPON_DATA[p.selectedSlot][slot.key];
+                if (p.selectedSlot === WeaponTypes.MELEE) return config.durability === Infinity ? '∞' : `DUR: ${slot.durability}`;
+                return `AMMO: ${slot.ammo}`;
+            };
 
             return React.createElement('div', { className: 'relative w-screen h-screen bg-black text-white overflow-hidden font-mono select-none' },
                 React.createElement(GameCanvas, { key: gameKey, gameKey, onUpdate: setState }),
+                // HUD
                 React.createElement('div', { className: 'absolute top-6 left-6 flex flex-col gap-4 ui-element' },
                     React.createElement('div', { className: 'bg-black/90 border-l-8 border-green-600 px-6 py-2 text-green-400 text-5xl font-black italic shadow-[8px_0_0_0_#166534]' }, `$ ${state.score.toString().padStart(8, '0')}`),
                     React.createElement('div', { className: 'w-80 space-y-2' },
-                        React.createElement('div', { className: 'h-6 bg-gray-950 border-2 border-white/20 rounded-sm p-1' }, React.createElement('div', { className: 'h-full bg-red-600 shadow-[0_0_15px_red]', style: { width: `${Math.max(0, state.player.health)}%` } })),
-                        React.createElement('div', { className: 'h-3 bg-gray-950 border-2 border-white/20 rounded-sm p-0.5' }, React.createElement('div', { className: 'h-full bg-blue-500 shadow-[0_0_10px_blue]', style: { width: `${state.player.stamina}%` } }))
+                        React.createElement('div', { className: 'h-6 bg-gray-950 border-2 border-white/20 rounded-sm p-1' }, React.createElement('div', { className: 'h-full bg-red-600', style: { width: `${state.player.health}%` } })),
+                        React.createElement('div', { className: 'h-3 bg-gray-950 border-2 border-white/20 rounded-sm p-0.5' }, React.createElement('div', { className: 'h-full bg-blue-500', style: { width: `${state.player.stamina}%` } }))
                     )
                 ),
-                React.createElement('div', { className: 'absolute top-6 right-6 flex gap-2 p-2 bg-black/60 border-b-4 border-yellow-600 rounded-lg ui-element' },
-                    weapons.map((w, i) => React.createElement('div', { key: w, className: `w-20 h-20 flex flex-col items-center justify-center border-2 ${state.player.weapon === w ? 'border-yellow-400 bg-yellow-400/20 scale-110' : 'border-white/10'}` },
-                        React.createElement('div', { className: 'text-[10px] opacity-40' }, i+1), React.createElement('div', { className: 'text-[10px] font-bold' }, w)
-                    ))
+                // Inventory
+                React.createElement('div', { className: 'absolute top-6 right-6 flex flex-col items-end gap-2 ui-element' },
+                    React.createElement('div', { className: 'flex gap-2 p-2 bg-black/60 border-b-4 border-yellow-600 rounded-lg' },
+                        [WeaponTypes.MELEE, WeaponTypes.PISTOL, WeaponTypes.RIFLE, WeaponTypes.THROWABLE].map((s, i) => (
+                            React.createElement('div', { key: s, className: `w-20 h-20 border-2 flex flex-col items-center justify-center ${state.player.selectedSlot === s ? 'border-yellow-400 bg-yellow-400/20' : 'border-white/10'}` },
+                                React.createElement('div', { className: 'text-[10px] opacity-40' }, i+1),
+                                React.createElement('div', { className: 'text-[9px] font-bold text-center px-1' }, state.player.inventory[s]?.key || 'EMPTY')
+                            )
+                        ))
+                    ),
+                    React.createElement('div', { className: 'text-yellow-400 font-bold italic' }, getSlotInfo())
                 ),
+                // Vehicle Speed
                 state.vehicle && React.createElement('div', { className: 'absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center ui-element bg-black/80 p-4 border-t-4 border-white rounded-t-xl min-w-[240px]' },
-                    React.createElement('div', { className: 'text-white text-xs opacity-50' }, 'GEAR'),
                     React.createElement('div', { className: 'text-4xl font-black italic text-yellow-400' }, state.vehicle.gear === -1 ? 'R' : state.vehicle.gear),
-                    React.createElement('div', { className: 'text-5xl font-black italic mt-2' }, `${Math.floor(Math.abs(state.vehicle.speed) * 26)} `, React.createElement('span', { className: 'text-xl opacity-30' }, 'KM/H'))
+                    React.createElement('div', { className: 'text-5xl font-black italic mt-1' }, `${Math.floor(Math.abs(state.vehicle.speed) * 28)} KM/H`)
                 ),
+                // Throw Charge UI
+                state.player.state === 'charging' && React.createElement('div', { className: 'absolute top-1/2 left-1/2 -translate-x-1/2 mt-20 bg-black/60 p-2 border-2 border-white text-xs' }, 
+                    state.player.throwCanceled ? 'CANCELING (HOLD SHIFT)' : 'CHARGING THROW (SPACE)'
+                ),
+                // Controls
                 React.createElement('div', { className: 'absolute bottom-6 left-6 text-[11px] font-bold opacity-40 bg-black/40 p-2 rounded border-l-2 border-white/20 ui-element' },
-                    'WASD: 이동 | F: 하차 | E: 기어 | Shift: 걷기(무소음/회복) | Space: 구르기 | L-CLICK: 공격 | R-CLICK: 조준'
+                    '1-4: 무기선택 | WASD: 이동 | F: 하차 | Space: 구르기(이동중)/충전(정지) | L-CLICK: 공격 | R-CLICK: 조준'
                 ),
-                state.player.health <= 0 && React.createElement('div', { className: 'absolute inset-0 bg-red-950/90 flex flex-col items-center justify-center z-50 animate-fade-in backdrop-blur-md' },
+                state.player.health <= 0 && React.createElement('div', { className: 'absolute inset-0 bg-red-950/90 flex flex-col items-center justify-center z-50 animate-fade-in' },
                     React.createElement('h1', { className: 'text-9xl font-black mb-12 skew-x-[-10deg]' }, 'WASTED'),
                     React.createElement('button', { className: 'px-12 py-4 bg-white text-red-950 font-black text-2xl hover:scale-110 pointer-events-auto', onClick: () => setGameKey(k => k+1) }, 'RESPAWN')
                 )
